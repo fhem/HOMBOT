@@ -73,7 +73,7 @@ sub HOMEBOT_Define($$) {
     
     my @a = split( "[ \t][ \t]*", $def );
 
-    return "too few parameters: define <name> HOMEBOT <HOST>" if( @a != 2 );
+    return "too few parameters: define <name> HOMEBOT <HOST>" if( @a != 3 );
 
     my $name    	= $a[0];
     my $host    	= $a[2];
