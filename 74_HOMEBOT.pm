@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.3";
+my $version = "0.0.4";
 
 
 
@@ -437,6 +437,11 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	Log3 $name, 4, "HOMEBOT ($name) - Homebot paused";
 	    
 	return HOMEBOT_HTTP_POST( $hash,$url );
+    }
+    
+    elsif( lc $cmd eq 'statusrequest' ) {
+	HOMEBOT_Get_stateRequestLocal( $hash );
+	return undef;
     }
 
     return undef;
