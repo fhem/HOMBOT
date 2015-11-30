@@ -202,8 +202,10 @@ sub HOMEBOT_RetrieveHomebotInfomations($) {
     my $port = $hash->{PORT};
 
     
-    my $url = "http://" . $host . ":" . $port . "/status.txt"; # Path muß so im Automagic als http request Trigger drin stehen
-  
+    #my $url = "http://" . $host . ":" . $port . "/status.txt"; # Path muß so im Automagic als http request Trigger drin stehen
+    my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22BLACKBOX%22:%22REQUEST_ABSTRACT%22%7d";
+
+
     HttpUtils_NonblockingGet(
 	{
 	    url		=> $url,
