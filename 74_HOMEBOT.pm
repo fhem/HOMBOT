@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.6";
+my $version = "0.0.8";
 
 
 
@@ -338,6 +338,8 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
 
 
     my @valuestring = split( '=',  $data );
+    printf "\n\nfirstSplit\n@valuestring\n\n";
+    
     my %buffer;
     foreach( @valuestring ) {
 	my @values = split( '"' , $_ );
@@ -349,8 +351,12 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
     
     my $t;
     my $v;
+    
     while( ( $t, $v ) = each %buffer ) {
-	$v =~ s/null//g;
+	#$v =~ s/null//g;
+	
+	printf "\nReading: $t - Value: $v\n";
+	
 	readingsBulkUpdate( $hash, $t, $v ) if( defined( $v ) );
     }
     
