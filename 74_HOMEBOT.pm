@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.5";
+my $version = "0.0.6";
 
 
 
@@ -377,14 +377,18 @@ sub HOMEBOT_Set($$@) {
 	$list .= "homing:noArg ";
 	$list .= "pause:noArg ";
 	$list .= "statusRequest:noArg ";
-	$list .= "cleanMode:CLEAN_SB,CLEAN_ZZ ";
+	$list .= "cleanMode:CLEAN_SB,CLEAN_ZZ,CLEAN_SPOT ";
+	$list .= "repeat:true,false ";
+	$list .= "turbo:true,false ";
 	
 
 	if( lc $cmd eq 'cleanstart'
 	    || lc $cmd eq 'homing'
 	    || lc $cmd eq 'pause'
 	    || lc $cmd eq 'statusrequest'
-	    || lc $cmd eq 'cleanmode' ) {
+	    || lc $cmd eq 'cleanmode'
+	    || lc $cmd eq 'repeat'
+	    || lc $cmd eq 'turbo' ) {
 
 	    Log3 $name, 5, "HOMEBOT ($name) - set $name $cmd ".join(" ", @val);
 	  
@@ -435,7 +439,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$mode."%22%7d%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - Homebot paused";
+	Log3 $name, 4, "HOMEBOT ($name) - set Cleanmode to $mode";
 	    
 	return HOMEBOT_HTTP_POST( $hash,$url );
     }
@@ -443,6 +447,26 @@ sub HOMEBOT_SelectSetCmd($$@) {
     elsif( lc $cmd eq 'statusrequest' ) {
 	HOMEBOT_Get_stateRequestLocal( $hash );
 	return undef;
+    }
+    
+    elsif( lc $cmd eq 'repeat' ) {
+        my $repeat = join( " ", @data );
+	
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$repeat."%22%7d%7d";
+
+	Log3 $name, 4, "HOMEBOT ($name) - set Repeat to $repeat";
+	    
+	return HOMEBOT_HTTP_POST( $hash,$url );
+    }
+    
+    elsif( lc $cmd eq 'turbo' ) {
+        my $turbo = join( " ", @data );
+	
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$turbo."%22%7d%7d";
+
+	Log3 $name, 4, "HOMEBOT ($name) - set Turbo to $turbo";
+	    
+	return HOMEBOT_HTTP_POST( $hash,$url );
     }
 
     return undef;
