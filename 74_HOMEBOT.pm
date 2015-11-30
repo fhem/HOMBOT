@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.4";
+my $version = "0.0.5";
 
 
 
@@ -202,8 +202,7 @@ sub HOMEBOT_RetrieveHomebotInfomations($) {
     my $port = $hash->{PORT};
 
     
-    #my $url = "http://" . $host . ":" . $port . "/status.txt"; # Path muß so im Automagic als http request Trigger drin stehen
-    my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22BLACKBOX%22:%22REQUEST_ABSTRACT%22%7d";
+    my $url = "http://" . $host . ":" . $port . "/status.txt"; # Path muß so im Automagic als http request Trigger drin stehen
 
 
     HttpUtils_NonblockingGet(
@@ -338,10 +337,10 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
 
 
 
-    my @valuestring = split( '@@@@',  $data );
+    my @valuestring = split( '=',  $data );
     my %buffer;
     foreach( @valuestring ) {
-	my @values = split( '@@' , $_ );
+	my @values = split( '"' , $_ );
 	$buffer{$values[0]} = $values[1];
     }
 
