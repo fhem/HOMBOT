@@ -434,7 +434,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	return HOMEBOT_HTTP_POST( $hash,$url );
     }
     
-    elsif( lc $cmd eq 'cleanmod' ) {
+    elsif( lc $cmd eq 'cleanmode' ) {
         my $mode = join( " ", @data );
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$mode."%22%7d%7d";
