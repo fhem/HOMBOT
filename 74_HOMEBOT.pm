@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.1";
+my $version = "0.0.2";
 
 
 
@@ -88,8 +88,9 @@ sub HOMEBOT_Define($$) {
 
     Log3 $name, 3, "HOMEBOT ($name) - defined with host $hash->{HOST} on port $hash->{PORT} and interval $hash->{INTERVAL} (sec)";
 
-    $attr{$name}{room} = "HOMEBOT" if( !defined( $attr{$name}{room} ) );
-    readingsSingleUpdate ( $hash, "state", "initialized", 1 );
+    $attr{$name}{room} = "HOMEBOT" if( !defined( $attr{$name}{room} ) );    # sorgt für Diskussion, überlegen ob nötig
+    #readingsSingleUpdate ( $hash, "state", "initialized", 1 );  bleibt solange bis ein Request gemacht werden kann und Readings angelegt
+    readingsSingleUpdate ( $hash, "state", "active", 1 );
 
     #InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMEBOT_Get_stateRequest", $hash, 0 ); zum testen deaktiviert
 	
