@@ -455,7 +455,7 @@ sub HOMEBOT_HTTP_POST($$) {
 	    url		=> $url,
 	    timeout	=> 10,
 	    hash	=> $hash,
-	    method	=> "POST",
+	    method	=> "GET",
 	    doTrigger	=> 1,
 	    callback	=> \&HOMEBOT_HTTP_POSTerrorHandling,
 	}
