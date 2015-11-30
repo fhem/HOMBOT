@@ -333,16 +333,12 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
     readingsSingleUpdate( $hash, "state", "active", 1) if( ReadingsVal( $name, "state", 0 ) ne "initialized" or ReadingsVal( $name, "state", 0 ) ne "active" );
 
 
-
-
-
-
-    my @valuestring = split( '=',  $data );
-    printf "\n\nfirstSplit\n@valuestring\n\n";
+    
+    my @valuestring = split( '\R',  $data );
     
     my %buffer;
     foreach( @valuestring ) {
-	my @values = split( '"' , $_ );
+	my @values = split( '="' , $_ );
 	$buffer{$values[0]} = $values[1];
     }
 
