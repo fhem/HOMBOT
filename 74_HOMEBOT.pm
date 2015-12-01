@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.8";
+my $version = "0.0.9";
 
 
 
@@ -262,28 +262,19 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
 	readingsEndUpdate( $hash, 1 );
     }
     
-    if( defined( $err ) ) {
-	if( $err ne "" ) {
-	    readingsBeginUpdate( $hash );
-	    readingsBulkUpdate ( $hash, "state", "$err") if( ReadingsVal( $name, "state", 1 ) ne "initialized" );
-	    $hash->{helper}{infoErrorCounter} = ( $hash->{helper}{infoErrorCounter} + 1 );
+    if( defined( $err ) && $err ne "" ) {
+    
+        readingsBeginUpdate( $hash );
+        readingsBulkUpdate ( $hash, "state", "$err") if( ReadingsVal( $name, "state", 1 ) ne "initialized" );
+        $hash->{helper}{infoErrorCounter} = ( $hash->{helper}{infoErrorCounter} + 1 );
 
-	    readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
-	  
-	    if( $err =~ /timed out/ ) {
-		readingsBulkUpdate( $hash, "lastStatusRequestError", "connect to your device is timed out. check network ");
-	    }
-	    elsif( ( $err =~ /Keine Route zum Zielrechner/ ) && $hash->{helper}{infoErrorCounter} > 1 ) {
-		readingsBulkUpdate( $hash,"lastStatusRequestError", "no route to target. bad network configuration or network is down ");
-	    } else {
-		readingsBulkUpdate($hash, "lastStatusRequestError", $err );
-	    }
+        readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
+        readingsBulkUpdate($hash, "lastStatusRequestError", $err );
 
 	readingsEndUpdate( $hash, 1 );
 	
 	Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_HomebotInfomations: error while request: $err";
 	return;
-	}
     }
 
     if( $data eq "" and exists( $param->{code} ) ) {
@@ -312,11 +303,11 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
 
 	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
     
-	    if( $param->{code} eq 404 ) {
-		readingsBulkUpdate( $hash, "lastStatusRequestError", "HTTP Server at Homebot offline" );
-	    } else {
-		readingsBulkUpdate( $hash, "lastStatusRequestError", "http error ".$param->{code} );
-	    }
+        if( $param->{code} eq 404 ) {
+            readingsBulkUpdate( $hash, "lastStatusRequestError", "HTTP Server at Homebot offline" );
+        } else {
+            readingsBulkUpdate( $hash, "lastStatusRequestError", "http error ".$param->{code} );
+        }
 	
 	readingsEndUpdate( $hash, 1 );
     
@@ -349,7 +340,7 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
     my $v;
     
     while( ( $t, $v ) = each %buffer ) {
-	#$v =~ s/null//g;
+	$v =~ s/"//g;
 	
 	printf "\nReading: $t - Value: $v\n";
 	
@@ -541,28 +532,20 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
 	readingsEndUpdate( $hash, 1 );
     }
     
-    if( defined( $err ) ) {
-	if( $err ne "" ) {
-	  readingsBeginUpdate( $hash );
-	  readingsBulkUpdate( $hash, "state", $err ) if( ReadingsVal( $name, "state", 0 ) ne "initialized" );
-	  $hash->{helper}{setCmdErrorCounter} = ($hash->{helper}{setCmdErrorCounter} + 1);
+    if( defined( $err ) && $err ne "" ) {
+	
+        readingsBeginUpdate( $hash );
+        readingsBulkUpdate( $hash, "state", $err ) if( ReadingsVal( $name, "state", 0 ) ne "initialized" );
+        $hash->{helper}{setCmdErrorCounter} = ($hash->{helper}{setCmdErrorCounter} + 1);
 	  
-	  readingsBulkUpdate( $hash, "lastSetCommandState", "cmd_error" );
+        readingsBulkUpdate( $hash, "lastSetCommandState", "cmd_error" );
+        readingsBulkUpdate( $hash, "lastSetCommandError", "$err" );
+          
+        readingsEndUpdate( $hash, 1 );
 	  
-	  if( $err =~ /timed out/ ) {
-	      readingsBulkUpdate( $hash, "lastSetCommandError", "connect to your device is timed out. check network" );
-	  }
-	  elsif( $err =~ /Keine Route zum Zielrechner/ ) {
-	      readingsBulkUpdate( $hash, "lastSetCommandError", "no route to target. bad network configuration or network is down" );
-	  } else {
-	      readingsBulkUpdate( $hash, "lastSetCommandError", "$err" );
-	  }
-	  readingsEndUpdate( $hash, 1 );
+        Log3 $name, 5, "HOMEBOT ($name) - HOMEBOT_HTTP_POST: error while POST Command: $err";
 	  
-	  Log3 $name, 5, "HOMEBOT ($name) - HOMEBOT_HTTP_POST: error while POST Command: $err";
-	  
-	  return;
-	}
+        return;
     }
  
     if( $data eq "" and exists( $param->{code} ) && $param->{code} ne 200 ) {
