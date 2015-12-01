@@ -35,15 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use TcpServerUtils;
 
-my $version = "0.0.9";
-
-
-
-
-# my %jsonCmd =   (         Wird gebraucht wenn wir auf die JSON Schnittstelle umstellen
-                  #);
-
-
+my $version = "0.1.0";
 
 
 
@@ -92,7 +84,7 @@ sub HOMEBOT_Define($$) {
     #readingsSingleUpdate ( $hash, "state", "initialized", 1 );  bleibt solange bis ein Request gemacht werden kann und Readings angelegt
     readingsSingleUpdate ( $hash, "state", "active", 1 );
 
-    #InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMEBOT_Get_stateRequest", $hash, 0 ); zum testen deaktiviert
+    InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMEBOT_Get_stateRequest", $hash, 0 );
 	
     return undef;
 }
@@ -202,7 +194,7 @@ sub HOMEBOT_RetrieveHomebotInfomations($) {
     my $port = $hash->{PORT};
 
     
-    my $url = "http://" . $host . ":" . $port . "/status.txt"; # Path muß so im Automagic als http request Trigger drin stehen
+    my $url = "http://" . $host . ":" . $port . "/status.txt";
 
 
     HttpUtils_NonblockingGet(
@@ -323,12 +315,12 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
     ### Begin Parse Processing
     readingsSingleUpdate( $hash, "state", "active", 1) if( ReadingsVal( $name, "state", 0 ) ne "initialized" or ReadingsVal( $name, "state", 0 ) ne "active" );
 
-
     
     my @valuestring = split( '\R',  $data );
-    
     my %buffer;
+    
     foreach( @valuestring ) {
+    
 	my @values = split( '="' , $_ );
 	$buffer{$values[0]} = $values[1];
     }
@@ -340,10 +332,8 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
     my $v;
     
     while( ( $t, $v ) = each %buffer ) {
-	$v =~ s/"//g;
-	
-	printf "\nReading: $t - Value: $v\n";
-	
+    
+	$v =~ tr/"//d;
 	readingsBulkUpdate( $hash, $t, $v ) if( defined( $v ) );
     }
     
