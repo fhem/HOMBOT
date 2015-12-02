@@ -70,7 +70,7 @@ sub HOMEBOT_Define($$) {
     my $name    	= $a[0];
     my $host    	= $a[2];
     my $port		= 6260;
-    my $interval  	= 180;
+    my $interval  	= 30;
 
     $hash->{HOST} 	= $host;
     $hash->{PORT} 	= $port;
@@ -376,7 +376,7 @@ sub HOMEBOT_Set($$@) {
 	  
 	    return "set command only works if state not equal initialized, please wait for next interval run" if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "initialized");
 	  
-	    return HOMEBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( @val ) || lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' );
+	    return HOMEBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( @val ) || lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' || lc $cmd eq 'cleanmode');
 	}
 
 	return "Unknown argument $cmd, bearword as argument or wrong parameter(s), choose one of $list";
@@ -389,7 +389,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
     my $host = $hash->{HOST};
     my $port = $hash->{PORT};
 
-    if( lc $cmd eq 'cleanstart' ) {
+    if( lc $cmd eq 'cleanStart' ) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%22CLEAN_START%22%7d";
 
@@ -418,8 +418,8 @@ sub HOMEBOT_SelectSetCmd($$@) {
     
     elsif( lc $cmd eq 'cleanmode' ) {
         my $mode = join( " ", @data );
-	
-	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$mode."%22%7d%7d";
+
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:%22".$mode."%22%7d%7d";
 
 	Log3 $name, 4, "HOMEBOT ($name) - set Cleanmode to $mode";
 	    
@@ -434,7 +434,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
     elsif( lc $cmd eq 'repeat' ) {
         my $repeat = join( " ", @data );
 	
-	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$repeat."%22%7d%7d";
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22REPEAT%22:%22".$repeat."%22%7d%7d";
 
 	Log3 $name, 4, "HOMEBOT ($name) - set Repeat to $repeat";
 	    
@@ -444,7 +444,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
     elsif( lc $cmd eq 'turbo' ) {
         my $turbo = join( " ", @data );
 	
-	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:".$turbo."%22%7d%7d";
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22TURBO%22:%22".$turbo."%22%7d%7d";
 
 	Log3 $name, 4, "HOMEBOT ($name) - set Turbo to $turbo";
 	    
