@@ -33,9 +33,8 @@ use warnings;
 use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
-use TcpServerUtils;
 
-my $version = "0.1.2";
+my $version = "0.1.9";
 
 
 
@@ -177,7 +176,7 @@ sub HOMEBOT_Get_stateRequest($) {
     my ( $hash ) = @_;
     my $name = $hash->{NAME};
  
-    HOMEBOT_RetrieveHomebotInfomations( $hash ) if( AttrVal( $name, "disable", 0 ) ne "1" );
+    HOMEBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $name, "deviceState", "online" ) eq "online" && AttrVal( $name, "disable", 0 ) ne "1" );
   
     InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMEBOT_Get_stateRequest", $hash, 1 );
     Log3 $name, 4, "HOMEBOT ($name) - Call HOMEBOT_Get_stateRequest";
@@ -186,7 +185,15 @@ sub HOMEBOT_Get_stateRequest($) {
 }
 
 sub HOMEBOT_RetrieveHomebotInfomations($) {
+    my ( $hash ) = @_;
+    
+    HOMEBOT_getStatusTXT( $hash );
+    HOMEBOT_getSchedule( $hash );
+    
+    return undef;
+}
 
+sub HOMEBOT_getStatusTXT($) {
     my ($hash) = @_;
     my $name = $hash->{NAME};
     my $host = $hash->{HOST};
@@ -203,24 +210,50 @@ sub HOMEBOT_RetrieveHomebotInfomations($) {
 	    hash	=> $hash,
 	    method	=> "GET",
 	    doTrigger	=> 1,
-	    callback	=> \&HOMEBOT_Parse_HomebotInfomations,
+	    callback	=> \&HOMEBOT_RetrieveHomebotInfoFinished,
+	    id          => "statustxt",
 	}
     );
     Log3 $name, 4, "HOMEBOT ($name) - NonblockingGet get URL";
-    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_RetrieveHomebotInfomations: calling Host: $host";
+    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Retrieve status.txt Information: calling Host: $host";
 }
 
-sub HOMEBOT_Parse_HomebotInfomations($$$) {
+sub HOMEBOT_getSchedule($) {
+    my ($hash) = @_;
+    my $name = $hash->{NAME};
+    my $host = $hash->{HOST};
+    my $port = $hash->{PORT};
+
     
+    my $url = "http://" . $host . ":" . $port . "/sites/schedule.html";
+
+
+    HttpUtils_NonblockingGet(
+	{
+	    url		=> $url,
+	    timeout	=> 10,
+	    hash	=> $hash,
+	    method	=> "GET",
+	    doTrigger	=> 1,
+	    callback	=> \&HOMEBOT_RetrieveHomebotInfoFinished,
+	    id          => "schedule",
+	}
+    );
+    Log3 $name, 4, "HOMEBOT ($name) - NonblockingGet get URL";
+    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Retrieve Schedule Information: calling Host: $host";
+}
+
+sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
+
     my ( $param, $err, $data ) = @_;
     my $hash = $param->{hash};
+    my $parsid = $param->{id};
     my $doTrigger = $param->{doTrigger};
     my $name = $hash->{NAME};
     my $host = $hash->{HOST};
 
-    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_HomebotInfomations: processed request data";
-    printf "\n\n$data\n\n";
-    
+    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Response Infomations: processed response data";
+
 
 
     ### Begin Error Handling
@@ -241,12 +274,27 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
 	    
 	    return;
 	}
+	
+	if( $hash->{helper}{infoErrorCounter} > 2 && $hash->{helper}{setCmdErrorCounter} == 0 ) {
+	    readingsBulkUpdate( $hash, "lastStatusRequestError", "Homebot is offline" );
+	    
+	    Log3 $name, 4, "HOMEBOT ($name) - Homebot is offline";
+	    
+	    readingsBulkUpdate ( $hash, "homebotState", "offline");
+	    readingsBulkUpdate ( $hash, "state", "Homebot offline");
+	    
+	    $hash->{helper}{infoErrorCounter} = 0;
+	    $hash->{helper}{setCmdErrorCounter} = 0;
+	    
+	    return;
+	}
 
-	elsif( $hash->{helper}{infoErrorCounter} > 9 ) {
+	elsif( $hash->{helper}{infoErrorCounter} > 5 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "to many errors, check your network configuration" );
 	    
 	    Log3 $name, 4, "HOMEBOT ($name) - To many Errors please check your Network Configuration";
 
+	    readingsBulkUpdate ( $hash, "homebotState", "offline");
 	    readingsBulkUpdate ( $hash, "state", "To many Errors");
 	    $hash->{helper}{infoErrorCounter} = 0;
 	}
@@ -313,39 +361,66 @@ sub HOMEBOT_Parse_HomebotInfomations($$$) {
  
     ### Begin Parse Processing
     readingsSingleUpdate( $hash, "state", "active", 1) if( ReadingsVal( $name, "state", 0 ) ne "initialized" or ReadingsVal( $name, "state", 0 ) ne "active" );
-
     
-    my @valuestring = split( '\R',  $data );
-    my %buffer;
-    
-    foreach( @valuestring ) {
-    
-	my @values = split( '="' , $_ );
-	$buffer{$values[0]} = $values[1];
-    }
-
 
     readingsBeginUpdate( $hash );
     
-    my $t;
-    my $v;
+    if( $parsid eq "statustxt" ) {
     
-    while( ( $t, $v ) = each %buffer ) {
+        Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_status.txt";
     
-	$v =~ tr/"//d;
-	readingsBulkUpdate( $hash, $t, $v ) if( defined( $v ) );
+        my @valuestring = split( '\R',  $data );
+        my %buffer;
+    
+        foreach( @valuestring ) {
+    
+            my @values = split( '="' , $_ );
+            $buffer{$values[0]} = $values[1];
+        }
+    
+        my $t;
+        my $v;
+    
+        while( ( $t, $v ) = each %buffer ) {
+    
+            $v =~ tr/"//d;
+            readingsBulkUpdate( $hash, $t, $v ) if( defined( $v ) );
+        }
     }
     
+    elsif ( $parsid eq "sc" ) {
+    
+        Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_schedule.html";
+        
+        my @buf = ();
+        if( $data =~ m/<table cellpadding="0" cellspacing="0" class="timing" border="0">(.*)<\/table>/s ) {
+
+            my $table = $1;
+            my $row = 0;
+            while( $table =~ m/<tr>(.*?)<\/tr>/gs ) {
+                my $line = $1;
+
+                my $column = 0;
+                while( $line =~ m/<td>(.*?)<\/td>/g ) {
+                    $buf[$row][$column] = $1;
+                    ++$column;
+                }
+                
+                ++$row;
+            }
+        }
+
+    }
+
+
     readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_done" );
-    
-    
     
     $hash->{helper}{infoErrorCounter} = 0;
     ### End Response Processing
     
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
     readingsEndUpdate( $hash, 1 );
-    
+
     return undef;
 }
 
@@ -359,9 +434,11 @@ sub HOMEBOT_Set($$@) {
 	$list .= "homing:noArg ";
 	$list .= "pause:noArg ";
 	$list .= "statusRequest:noArg ";
-	$list .= "cleanMode:CLEAN_SB,CLEAN_ZZ,CLEAN_SPOT ";
+	$list .= "cleanMode:SB,ZZ,SPOT ";
 	$list .= "repeat:true,false ";
 	$list .= "turbo:true,false ";
+	$list .= "nickname " ;
+	$list .= "schedule" ;
 	
 
 	if( lc $cmd eq 'cleanstart'
@@ -370,12 +447,19 @@ sub HOMEBOT_Set($$@) {
 	    || lc $cmd eq 'statusrequest'
 	    || lc $cmd eq 'cleanmode'
 	    || lc $cmd eq 'repeat'
-	    || lc $cmd eq 'turbo' ) {
+	    || lc $cmd eq 'turbo' 
+	    || lc $cmd eq 'nickname'
+	    || lc $cmd eq 'schedule' ) {
 
 	    Log3 $name, 5, "HOMEBOT ($name) - set $name $cmd ".join(" ", @val);
-	  
+
+
+	    my $val = join( " ", @val );
+	    my $wordlenght = length($val);
+
 	    return "set command only works if state not equal initialized, please wait for next interval run" if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "initialized");
-	  
+	    return "to many bla bla for Nickname" if(( $wordlenght < 2 || $wordlenght > 16 ) && lc $cmd eq 'nickname' );
+
 	    return HOMEBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( @val ) || lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' );
 	}
 
@@ -419,7 +503,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
     elsif( lc $cmd eq 'cleanmode' ) {
         my $mode = join( " ", @data );
 	
-	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:%22".$mode."%22%7d%7d";
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:%22CLEAN_".$mode."%22%7d%7d";
 
 	Log3 $name, 4, "HOMEBOT ($name) - set Cleanmode to $mode";
 	    
@@ -434,7 +518,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
     elsif( lc $cmd eq 'repeat' ) {
         my $repeat = join( " ", @data );
 	
-	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:%22".$repeat."%22%7d%7d";
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22REPEAT%22:%22".$repeat."%22%7d%7d";
 
 	Log3 $name, 4, "HOMEBOT ($name) - set Repeat to $repeat";
 	    
@@ -444,13 +528,40 @@ sub HOMEBOT_SelectSetCmd($$@) {
     elsif( lc $cmd eq 'turbo' ) {
         my $turbo = join( " ", @data );
 	
-	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:%22".$turbo."%22%7d%7d";
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22TURBO%22:%22".$turbo."%22%7d%7d";
 
 	Log3 $name, 4, "HOMEBOT ($name) - set Turbo to $turbo";
 	    
 	return HOMEBOT_HTTP_POST( $hash,$url );
     }
+    
+    elsif( lc $cmd eq 'nickname' ) {
+        my $nick = join( " ", @data );
+	
+	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22NICKNAME%22:%7b%22SET%22:%22".$nick."%22%7d%7d";
 
+	Log3 $name, 4, "HOMEBOT ($name) - set Nickname to $nick";
+	    
+	return HOMEBOT_HTTP_POST( $hash,$url );
+    }
+    
+    elsif( lc $cmd eq 'schedule' ) {
+        my $stime = join( " ", @data );
+	
+	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$stime."&SEND=Save";
+
+	Log3 $name, 4, "HOMEBOT ($name) - set shedule to $stime";
+	    
+	return HOMEBOT_HTTP_POST( $hash,$url );
+    }
+
+    
+    #http://10.6.34.43:6260/sites/schedule.html?MONDAY=10:30&TUESDAY=5:30&WEDNESDAY=18:10&THURSDAY=17:20&FRIDAY=14:10&SATURDAY=17:30&SUNDAY=09:05&SEND=Save
+    
+    #BACKMOVING_INIT        CHARGING, BACKMOVING_INIT, WORKING, PAUSE, HOMING und DOCKING
+    
+    
+    
     return undef;
 }
 
