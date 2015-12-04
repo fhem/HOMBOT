@@ -34,37 +34,37 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.19";
+my $version = "0.1.21";
 
 
 
 
-sub HOMEBOT_Initialize($) {
+sub HOMBOT_Initialize($) {
 
     my ($hash) = @_;
 
-    $hash->{SetFn}	= "HOMEBOT_Set";
-    $hash->{DefFn}	= "HOMEBOT_Define";
-    $hash->{UndefFn}	= "HOMEBOT_Undef";
-    $hash->{AttrFn}	= "HOMEBOT_Attr";
+    $hash->{SetFn}	= "HOMBOT_Set";
+    $hash->{DefFn}	= "HOMBOT_Define";
+    $hash->{UndefFn}	= "HOMBOT_Undef";
+    $hash->{AttrFn}	= "HOMBOT_Attr";
     
     $hash->{AttrList} 	= "interval ".
 			  "disable:1 ".
 			  $readingFnAttributes;
     
-    foreach my $d(sort keys %{$modules{HOMEBOT}{defptr}}) {
-	my $hash = $modules{HOMEBOT}{defptr}{$d};
+    foreach my $d(sort keys %{$modules{HOMBOT}{defptr}}) {
+	my $hash = $modules{HOMBOT}{defptr}{$d};
 	$hash->{VERSION} 	= $version;
     }
 }
 
-sub HOMEBOT_Define($$) {
+sub HOMBOT_Define($$) {
 
     my ( $hash, $def ) = @_;
     
     my @a = split( "[ \t][ \t]*", $def );
 
-    return "too few parameters: define <name> HOMEBOT <HOST>" if( @a != 3 );
+    return "too few parameters: define <name> HOMBOT <HOST>" if( @a != 3 );
 
     my $name    	= $a[0];
     my $host    	= $a[2];
@@ -77,30 +77,30 @@ sub HOMEBOT_Define($$) {
     $hash->{VERSION} 	= $version;
 
 
-    Log3 $name, 3, "HOMEBOT ($name) - defined with host $hash->{HOST} on port $hash->{PORT} and interval $hash->{INTERVAL} (sec)";
+    Log3 $name, 3, "HOMBOT ($name) - defined with host $hash->{HOST} on port $hash->{PORT} and interval $hash->{INTERVAL} (sec)";
 
-    $attr{$name}{room} = "HOMEBOT" if( !defined( $attr{$name}{room} ) );    # sorgt für Diskussion, überlegen ob nötig
+    $attr{$name}{room} = "HOMBOT" if( !defined( $attr{$name}{room} ) );    # sorgt für Diskussion, überlegen ob nötig
     readingsSingleUpdate ( $hash, "state", "initialized", 1 );
 
-    InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMEBOT_Get_stateRequest", $hash, 0 );
+    InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMBOT_Get_stateRequest", $hash, 0 );
 	
     return undef;
 }
 
-sub HOMEBOT_Undef($$) {
+sub HOMBOT_Undef($$) {
 
     my ( $hash, $arg ) = @_;
     
     my $host = $hash->{HOST};
     my $name = $hash->{NAME};
     
-    delete $modules{HOMEBOT}{defptr}{$hash->{HOST}};
+    delete $modules{HOMBOT}{defptr}{$hash->{HOST}};
     RemoveInternalTimer( $hash );
     
     return undef;
 }
 
-sub HOMEBOT_Attr(@) {
+sub HOMBOT_Attr(@) {
 
     my ( $cmd, $name, $attrName, $attrVal ) = @_;
     my $hash = $defs{$name};
@@ -109,25 +109,25 @@ sub HOMEBOT_Attr(@) {
 	if( $cmd eq "set" ) {
 	    if( $attrVal eq "0" ) {
 		RemoveInternalTimer( $hash );
-		InternalTimer( gettimeofday()+2, "HOMEBOT_Get_stateRequest", $hash, 0 ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "disabled" );
+		InternalTimer( gettimeofday()+2, "HOMBOT_Get_stateRequest", $hash, 0 ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "disabled" );
 		readingsSingleUpdate ( $hash, "state", "active", 1 );
-		Log3 $name, 3, "HOMEBOT ($name) - enabled";
+		Log3 $name, 3, "HOMBOT ($name) - enabled";
 	    } else {
 		readingsSingleUpdate ( $hash, "state", "disabled", 1 );
 		RemoveInternalTimer( $hash );
-		Log3 $name, 3, "HOMEBOT ($name) - disabled";
+		Log3 $name, 3, "HOMBOT ($name) - disabled";
 	    }
 	}
 	elsif( $cmd eq "del" ) {
 	    RemoveInternalTimer( $hash );
-	    InternalTimer( gettimeofday()+2, "HOMEBOT_Get_stateRequest", $hash, 0 ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "disabled" );
+	    InternalTimer( gettimeofday()+2, "HOMBOT_Get_stateRequest", $hash, 0 ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "disabled" );
 	    readingsSingleUpdate ( $hash, "state", "active", 1 );
-	    Log3 $name, 3, "HOMEBOT ($name) - enabled";
+	    Log3 $name, 3, "HOMBOT ($name) - enabled";
 
 	} else {
 	    if($cmd eq "set") {
 		$attr{$name}{$attrName} = $attrVal;
-		Log3 $name, 3, "HOMEBOT ($name) - $attrName : $attrVal";
+		Log3 $name, 3, "HOMBOT ($name) - $attrName : $attrVal";
 	    }
 	    elsif( $cmd eq "del" ) {
 	    }
@@ -137,21 +137,21 @@ sub HOMEBOT_Attr(@) {
     if( $attrName eq "interval" ) {
 	if( $cmd eq "set" ) {
 	    if( $attrVal < 60 ) {
-		Log3 $name, 3, "HOMEBOT ($name) - interval too small, please use something > 60 (sec), default is 180 (sec)";
+		Log3 $name, 3, "HOMBOT ($name) - interval too small, please use something > 60 (sec), default is 180 (sec)";
 		return "interval too small, please use something > 60 (sec), default is 180 (sec)";
 	    } else {
 		$hash->{INTERVAL} = $attrVal;
-		Log3 $name, 3, "HOMEBOT ($name) - set interval to $attrVal";
+		Log3 $name, 3, "HOMBOT ($name) - set interval to $attrVal";
 	    }
 	}
 	elsif( $cmd eq "del" ) {
 	    $hash->{INTERVAL} = 180;
-	    Log3 $name, 3, "HOMEBOT ($name) - set interval to default";
+	    Log3 $name, 3, "HOMBOT ($name) - set interval to default";
 	
 	} else {
 	    if( $cmd eq "set" ) {
 		$attr{$name}{$attrName} = $attrVal;
-		Log3 $name, 3, "HOMEBOT ($name) - $attrName : $attrVal";
+		Log3 $name, 3, "HOMBOT ($name) - $attrName : $attrVal";
 	    }
 	    elsif( $cmd eq "del" ) {
 	    }
@@ -161,39 +161,40 @@ sub HOMEBOT_Attr(@) {
     return undef;
 }
 
-sub HOMEBOT_Get_stateRequestLocal($) {
+sub HOMBOT_Get_stateRequestLocal($) {
 
 my ( $hash ) = @_;
     my $name = $hash->{NAME};
 
-    HOMEBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) ne "initialized" && AttrVal( $name, "disable", 0 ) ne "1" );
+    HOMBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) ne "initialized" && AttrVal( $name, "disable", 0 ) ne "1" );
     
     return 0;
 }
 
-sub HOMEBOT_Get_stateRequest($) {
+sub HOMBOT_Get_stateRequest($) {
 
     my ( $hash ) = @_;
     my $name = $hash->{NAME};
  
-    HOMEBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $name, "deviceState", "online" ) eq "online" && AttrVal( $name, "disable", 0 ) ne "1" );
+    HOMBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $name, "deviceState", "online" ) eq "online" && AttrVal( $name, "disable", 0 ) ne "1" );
   
-    InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMEBOT_Get_stateRequest", $hash, 1 );
-    Log3 $name, 4, "HOMEBOT ($name) - Call HOMEBOT_Get_stateRequest";
+    InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMBOT_Get_stateRequest", $hash, 1 );
+    Log3 $name, 4, "HOMBOT ($name) - Call HOMBOT_Get_stateRequest";
 
     return 1;
 }
 
-sub HOMEBOT_RetrieveHomebotInfomations($) {
+sub HOMBOT_RetrieveHomebotInfomations($) {
     my ( $hash ) = @_;
     
-    HOMEBOT_getStatusTXT( $hash );
-    HOMEBOT_getSchedule( $hash );
+    HOMBOT_getStatusTXT( $hash );
+    HOMBOT_getSchedule( $hash );
     
     return undef;
 }
 
-sub HOMEBOT_getStatusTXT($) {
+sub HOMBOT_getStatusTXT($) {
+
     my ($hash) = @_;
     my $name = $hash->{NAME};
     my $host = $hash->{HOST};
@@ -210,15 +211,16 @@ sub HOMEBOT_getStatusTXT($) {
 	    hash	=> $hash,
 	    method	=> "GET",
 	    doTrigger	=> 1,
-	    callback	=> \&HOMEBOT_RetrieveHomebotInfoFinished,
+	    callback	=> \&HOMBOT_RetrieveHomebotInfoFinished,
 	    id          => "statustxt",
 	}
     );
-    Log3 $name, 4, "HOMEBOT ($name) - NonblockingGet get URL";
-    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Retrieve status.txt Information: calling Host: $host";
+    Log3 $name, 4, "HOMBOT ($name) - NonblockingGet get URL";
+    Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Retrieve status.txt Information: calling Host: $host";
 }
 
-sub HOMEBOT_getSchedule($) {
+sub HOMBOT_getSchedule($) {
+
     my ($hash) = @_;
     my $name = $hash->{NAME};
     my $host = $hash->{HOST};
@@ -235,15 +237,15 @@ sub HOMEBOT_getSchedule($) {
 	    hash	=> $hash,
 	    method	=> "GET",
 	    doTrigger	=> 1,
-	    callback	=> \&HOMEBOT_RetrieveHomebotInfoFinished,
+	    callback	=> \&HOMBOT_RetrieveHomebotInfoFinished,
 	    id          => "schedule",
 	}
     );
-    Log3 $name, 4, "HOMEBOT ($name) - NonblockingGet get URL";
-    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Retrieve Schedule Information: calling Host: $host";
+    Log3 $name, 4, "HOMBOT ($name) - NonblockingGet get URL";
+    Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Retrieve Schedule Information: calling Host: $host";
 }
 
-sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
+sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 
     my ( $param, $err, $data ) = @_;
     my $hash = $param->{hash};
@@ -252,7 +254,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
     my $name = $hash->{NAME};
     my $host = $hash->{HOST};
 
-    Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Response Infomations: processed response data";
+    Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Response Infomations: processed response data";
 
 
 
@@ -264,7 +266,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
 	if( $hash->{helper}{infoErrorCounter} > 9 && $hash->{helper}{setCmdErrorCounter} > 4 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "unknown error, please contact the developer" );
 	    
-	    Log3 $name, 4, "HOMEBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
+	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
 	    
 	    $attr{$name}{disable} = 1;
 	    readingsBulkUpdate ( $hash, "state", "Unknown Error, device disabled");
@@ -278,7 +280,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
 	if( $hash->{helper}{infoErrorCounter} > 2 && $hash->{helper}{setCmdErrorCounter} == 0 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "Homebot is offline" );
 	    
-	    Log3 $name, 4, "HOMEBOT ($name) - Homebot is offline";
+	    Log3 $name, 4, "HOMBOT ($name) - Homebot is offline";
 	    
 	    readingsBulkUpdate ( $hash, "homebotState", "offline");
 	    readingsBulkUpdate ( $hash, "state", "Homebot offline");
@@ -292,7 +294,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
 	elsif( $hash->{helper}{infoErrorCounter} > 5 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "to many errors, check your network configuration" );
 	    
-	    Log3 $name, 4, "HOMEBOT ($name) - To many Errors please check your Network Configuration";
+	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network Configuration";
 
 	    readingsBulkUpdate ( $hash, "homebotState", "offline");
 	    readingsBulkUpdate ( $hash, "state", "To many Errors");
@@ -312,7 +314,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
 
 	readingsEndUpdate( $hash, 1 );
 	
-	Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_HomebotInfomations: error while request: $err";
+	Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_HomebotInfomations: error while request: $err";
 	return;
     }
 
@@ -330,7 +332,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
 	readingsBulkUpdate( $hash, "lastStatusRequestError", "empty response" );
 	readingsEndUpdate( $hash, 1 );
     
-	Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_RetrieveHomebotInfomationsFinished: received http code ".$param->{code}." without any data after requesting HOMEBOT Device";
+	Log3 $name, 4, "HOMBOT ($name) - HOMBOT_RetrieveHomebotInfomationsFinished: received http code ".$param->{code}." without any data after requesting HOMBOT Device";
 
 	return;
     }
@@ -350,7 +352,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
 	
 	readingsEndUpdate( $hash, 1 );
     
-	Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_HomebotInfomations: received http code ".$param->{code}." receive Error after requesting HOMEBOT";
+	Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_HomebotInfomations: received http code ".$param->{code}." receive Error after requesting HOMBOT";
 
 	return;
     }
@@ -367,7 +369,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
     
     if( $parsid eq "statustxt" ) {
     
-        Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_status.txt";
+        Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_status.txt";
     
         my @valuestring = split( '\R',  $data );
         my %buffer;
@@ -386,7 +388,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
             $v =~ tr/"//d;
             $t =~ s/JSON_MODE/cleanMode/g;
             $t =~ s/JSON_NICKNAME/nickname/g;
-            $t =~ s/JSON_REPEAT/repeate/g;
+            $t =~ s/JSON_REPEAT/repeat/g;
             $t =~ s/JSON_TURBO/turbo/g;
             $t =~ s/JSON_ROBOT_STATE/homebotState/g;
             $t =~ s/CLREC_CURRENTBUMPING/currentBumping/g;
@@ -401,7 +403,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
     
     elsif ( $parsid eq "schedule" ) {
     
-        Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_schedule.html";
+        Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_schedule.html";
         
         my $t;
         my $v;
@@ -426,7 +428,7 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
     return undef;
 }
 
-sub HOMEBOT_Set($$@) {
+sub HOMBOT_Set($$@) {
     
     my ( $hash, $name, $cmd, @val ) = @_;
 
@@ -453,7 +455,7 @@ sub HOMEBOT_Set($$@) {
 	    || lc $cmd eq 'nickname'
 	    || lc $cmd eq 'schedule' ) {
 
-	    Log3 $name, 5, "HOMEBOT ($name) - set $name $cmd ".join(" ", @val);
+	    Log3 $name, 5, "HOMBOT ($name) - set $name $cmd ".join(" ", @val);
 
 
 	    my $val = join( " ", @val );
@@ -462,13 +464,13 @@ sub HOMEBOT_Set($$@) {
 	    return "set command only works if state not equal initialized, please wait for next interval run" if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "initialized");
 	    return "to many bla bla for Nickname" if(( $wordlenght < 2 || $wordlenght > 16 ) && lc $cmd eq 'nickname' );
 
-	    return HOMEBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( @val ) || lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' );
+	    return HOMBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( @val ) || lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' );
 	}
 
 	return "Unknown argument $cmd, bearword as argument or wrong parameter(s), choose one of $list";
 }
 
-sub HOMEBOT_SelectSetCmd($$@) {
+sub HOMBOT_SelectSetCmd($$@) {
 
     my ( $hash, $cmd, @data ) = @_;
     my $name = $hash->{NAME};
@@ -479,27 +481,27 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%22CLEAN_START%22%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - Homebot start cleaning";
+	Log3 $name, 4, "HOMBOT ($name) - Homebot start cleaning";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'homing' ) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%22HOMING%22%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - Homebot come home";
+	Log3 $name, 4, "HOMBOT ($name) - Homebot come home";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'pause' ) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%22PAUSE%22%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - Homebot paused";
+	Log3 $name, 4, "HOMBOT ($name) - Homebot paused";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'cleanmode' ) {
@@ -507,13 +509,13 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22CLEAN_MODE%22:%22CLEAN_".$mode."%22%7d%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - set Cleanmode to $mode";
+	Log3 $name, 4, "HOMBOT ($name) - set Cleanmode to $mode";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'statusrequest' ) {
-	HOMEBOT_Get_stateRequestLocal( $hash );
+	HOMBOT_Get_stateRequestLocal( $hash );
 	return undef;
     }
     
@@ -522,9 +524,9 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22REPEAT%22:%22".$repeat."%22%7d%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - set Repeat to $repeat";
+	Log3 $name, 4, "HOMBOT ($name) - set Repeat to $repeat";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'turbo' ) {
@@ -532,9 +534,9 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22COMMAND%22:%7b%22TURBO%22:%22".$turbo."%22%7d%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - set Turbo to $turbo";
+	Log3 $name, 4, "HOMBOT ($name) - set Turbo to $turbo";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'nickname' ) {
@@ -542,13 +544,14 @@ sub HOMEBOT_SelectSetCmd($$@) {
 	
 	my $url = "http://" . $host . ":" . $port . "/json.cgi?%7b%22NICKNAME%22:%7b%22SET%22:%22".$nick."%22%7d%7d";
 
-	Log3 $name, 4, "HOMEBOT ($name) - set Nickname to $nick";
+	Log3 $name, 4, "HOMBOT ($name) - set Nickname to $nick";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     elsif( lc $cmd eq 'schedule' ) {
-        #my $stime = join( " ", @data );
+
+        #$t =~ s/CLREC_CURRENTBUMPING/currentBumping/g;
         my $mo = @data[0];
         my $tu = @data[1];
         my $we = @data[2];
@@ -557,11 +560,11 @@ sub HOMEBOT_SelectSetCmd($$@) {
         my $sa = @data[5];
         my $su = @data[6];
 	
-	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?MONDAY=".$mo."&TUESDAY=".$tu."&WEDNESDAY=".$we."&THURSDAY=".$th."&FRIDAY=".$fr."&SATURDAY=".$sa."&SUNDAY=".$su."&SEND=Save";
+	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$mo."&".$tu."&".$we."&".$th."&".$fr."&".$sa."&".$su."&SEND=Save";
 
-	Log3 $name, 4, "HOMEBOT ($name) - set schedule to MONDAY=$mo, TUESDAY=$tu, WEDNESDAY=$we, THURSDAY=$th,FRIDAY=$fr, SATURDAY=$sa, SUNDAY=$su";
+	Log3 $name, 4, "HOMBOT ($name) - set schedule to $mo, $tu, $we, $th, $fr, $sa, $su";
 	    
-	return HOMEBOT_HTTP_POST( $hash,$url );
+	return HOMBOT_HTTP_POST( $hash,$url );
     }
     
     #BACKMOVING_INIT        CHARGING, BACKMOVING_INIT, WORKING, PAUSE, HOMING und DOCKING
@@ -569,7 +572,7 @@ sub HOMEBOT_SelectSetCmd($$@) {
     return undef;
 }
 
-sub HOMEBOT_HTTP_POST($$) {
+sub HOMBOT_HTTP_POST($$) {
 
     my ( $hash, $url ) = @_;
     my $name = $hash->{NAME};
@@ -585,17 +588,17 @@ sub HOMEBOT_HTTP_POST($$) {
 	    hash	=> $hash,
 	    method	=> "GET",
 	    doTrigger	=> 1,
-	    callback	=> \&HOMEBOT_HTTP_POSTerrorHandling,
+	    callback	=> \&HOMBOT_HTTP_POSTerrorHandling,
 	}
     );
-    Log3 $name, 4, "HOMEBOT ($name) - Send HTTP POST with URL $url";
+    Log3 $name, 4, "HOMBOT ($name) - Send HTTP POST with URL $url";
 
     readingsSingleUpdate( $hash, "state", $state, 1 );
 
     return undef;
 }
 
-sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
+sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 
     my ( $param, $err, $data ) = @_;
     my $hash = $param->{hash};
@@ -610,7 +613,7 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
 	if( $hash->{helper}{infoErrorCounter} > 9 && $hash->{helper}{setCmdErrorCounter} > 4 ) {
 	    readingsBulkUpdate($hash, "lastSetCommandError", "unknown error, please contact the developer" );
 	    
-	    Log3 $name, 4, "HOMEBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
+	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
 	    
 	    $attr{$name}{disable} = 1;
 	    readingsBulkUpdate( $hash, "state", "Unknown Error" );
@@ -623,12 +626,12 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
 	elsif( $hash->{helper}{setCmdErrorCounter} > 4 ){
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "HTTP Server at Homebot offline" );
 	    
-	    Log3 $name, 4, "HOMEBOT ($name) - Please check HTTP Server at Homebot";
+	    Log3 $name, 4, "HOMBOT ($name) - Please check HTTP Server at Homebot";
 	} 
 	elsif( $hash->{helper}{setCmdErrorCounter} > 9 ) {
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "to many errors, check your network or device configuration" );
 	    
-	    Log3 $name, 4, "HOMEBOT ($name) - To many Errors please check your Network or Device Configuration";
+	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network or Device Configuration";
 
 	    readingsBulkUpdate( $hash, "state", "To many Errors" );
 	    $hash->{helper}{setCmdErrorCounter} = 0;
@@ -647,7 +650,7 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
           
         readingsEndUpdate( $hash, 1 );
 	  
-        Log3 $name, 5, "HOMEBOT ($name) - HOMEBOT_HTTP_POST: error while POST Command: $err";
+        Log3 $name, 5, "HOMBOT ($name) - HOMBOT_HTTP_POST: error while POST Command: $err";
 	  
         return;
     }
@@ -662,7 +665,7 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
 	readingsBulkUpdate($hash, "lastSetCommandError", "http Error ".$param->{code} );
 	readingsEndUpdate( $hash, 1 );
     
-	Log3 $name, 5, "HOMEBOT ($name) - HOMEBOT_HTTP_POST: received http code ".$param->{code};
+	Log3 $name, 5, "HOMBOT ($name) - HOMBOT_HTTP_POST: received http code ".$param->{code};
 
 	return;
     }
@@ -689,7 +692,7 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
     readingsSingleUpdate( $hash, "lastSetCommandState", "cmd_done", 1 );
     $hash->{helper}{setCmdErrorCounter} = 0;
     
-    HOMEBOT_Get_stateRequestLocal( $hash );
+    HOMBOT_Get_stateRequestLocal( $hash );
     
     return undef;
 }
@@ -701,8 +704,8 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
 =pod
 =begin html
 
-<a name="HOMEBOT"></a>
-<h3>HOMEBOT</h3>
+<a name="HOMBOT"></a>
+<h3>HOMBOT</h3>
 <ul>
 
 </ul>
@@ -710,8 +713,8 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
 =end html
 =begin html_DE
 
-<a name="HOMEBOT"></a>
-<h3>HOMEBOT</h3>
+<a name="HOMBOT"></a>
+<h3>HOMBOT</h3>
 <ul>
 
 </ul>
