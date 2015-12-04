@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.9";
+my $version = "0.1.19";
 
 
 
@@ -384,32 +384,34 @@ sub HOMEBOT_RetrieveHomebotInfoFinished($$$) {
         while( ( $t, $v ) = each %buffer ) {
     
             $v =~ tr/"//d;
-            readingsBulkUpdate( $hash, $t, $v ) if( defined( $v ) );
+            $t =~ s/JSON_MODE/cleanMode/g;
+            $t =~ s/JSON_NICKNAME/nickname/g;
+            $t =~ s/JSON_REPEAT/repeate/g;
+            $t =~ s/JSON_TURBO/turbo/g;
+            $t =~ s/JSON_ROBOT_STATE/homebotState/g;
+            $t =~ s/CLREC_CURRENTBUMPING/currentBumping/g;
+            $t =~ s/CLREC_LAST_CLEAN/lastClean/g;
+            $t =~ s/JSON_BATTPERC/batteryPercent/g;
+            $t =~ s/JSON_VERSION/firmware/g;
+            $t =~ s/LGSRV_VERSION/luigiSrvVersion/g;
+            
+            readingsBulkUpdate( $hash, $t, $v ) if( defined( $t ) && defined( $v ) );
         }
     }
     
-    elsif ( $parsid eq "sc" ) {
+    elsif ( $parsid eq "schedule" ) {
     
         Log3 $name, 4, "HOMEBOT ($name) - HOMEBOT_Parse_schedule.html";
         
-        my @buf = ();
-        if( $data =~ m/<table cellpadding="0" cellspacing="0" class="timing" border="0">(.*)<\/table>/s ) {
+        my $t;
+        my $v;
+        my $i = 0;
+        
+        while( $data =~ m/name="(.*?)"\s*size="20" maxlength="20" value="(.*?)"/g ) {
 
-            my $table = $1;
-            my $row = 0;
-            while( $table =~ m/<tr>(.*?)<\/tr>/gs ) {
-                my $line = $1;
-
-                my $column = 0;
-                while( $line =~ m/<td>(.*?)<\/td>/g ) {
-                    $buf[$row][$column] = $1;
-                    ++$column;
-                }
-                
-                ++$row;
-            }
+            readingsBulkUpdate( $hash, "at_".$i."_".$1, "$2" ) if( defined( $1 ) && defined( $2 ) );
+            $i = ++$i;
         }
-
     }
 
 
@@ -546,21 +548,23 @@ sub HOMEBOT_SelectSetCmd($$@) {
     }
     
     elsif( lc $cmd eq 'schedule' ) {
-        my $stime = join( " ", @data );
+        #my $stime = join( " ", @data );
+        my $mo = @data[0];
+        my $tu = @data[1];
+        my $we = @data[2];
+        my $th = @data[3];
+        my $fr = @data[4];
+        my $sa = @data[5];
+        my $su = @data[6];
 	
-	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$stime."&SEND=Save";
+	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?MONDAY=".$mo."&TUESDAY=".$tu."&WEDNESDAY=".$we."&THURSDAY=".$th."&FRIDAY=".$fr."&SATURDAY=".$sa."&SUNDAY=".$su."&SEND=Save";
 
-	Log3 $name, 4, "HOMEBOT ($name) - set shedule to $stime";
+	Log3 $name, 4, "HOMEBOT ($name) - set schedule to MONDAY=$mo, TUESDAY=$tu, WEDNESDAY=$we, THURSDAY=$th,FRIDAY=$fr, SATURDAY=$sa, SUNDAY=$su";
 	    
 	return HOMEBOT_HTTP_POST( $hash,$url );
     }
-
-    
-    #http://10.6.34.43:6260/sites/schedule.html?MONDAY=10:30&TUESDAY=5:30&WEDNESDAY=18:10&THURSDAY=17:20&FRIDAY=14:10&SATURDAY=17:30&SUNDAY=09:05&SEND=Save
     
     #BACKMOVING_INIT        CHARGING, BACKMOVING_INIT, WORKING, PAUSE, HOMING und DOCKING
-    
-    
     
     return undef;
 }
@@ -685,24 +689,10 @@ sub HOMEBOT_HTTP_POSTerrorHandling($$$) {
     readingsSingleUpdate( $hash, "lastSetCommandState", "cmd_done", 1 );
     $hash->{helper}{setCmdErrorCounter} = 0;
     
+    HOMEBOT_Get_stateRequestLocal( $hash );
+    
     return undef;
 }
-
-sub HOMEBOT_Header2Hash($) {       
-    my ( $string ) = @_;
-    my %hash = ();
-
-    foreach my $line (split("\r\n", $string)) {
-        my ($key,$value) = split( ": ", $line );
-        next if( !$value );
-
-        $value =~ s/^ //;
-        $hash{$key} = $value;
-    }     
-        
-    return \%hash;
-}
-
 
 
 
