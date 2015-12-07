@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.21";
+my $version = "0.1.30";
 
 
 
@@ -51,7 +51,9 @@ sub HOMBOT_Initialize($) {
     $hash->{AttrList} 	= "interval ".
 			  "disable:1 ".
 			  $readingFnAttributes;
-    
+
+
+
     foreach my $d(sort keys %{$modules{HOMBOT}{defptr}}) {
 	my $hash = $modules{HOMBOT}{defptr}{$d};
 	$hash->{VERSION} 	= $version;
@@ -69,12 +71,14 @@ sub HOMBOT_Define($$) {
     my $name    	= $a[0];
     my $host    	= $a[2];
     my $port		= 6260;
-    my $interval  	= 180;
+    my $interval  	= 120;
 
     $hash->{HOST} 	= $host;
     $hash->{PORT} 	= $port;
     $hash->{INTERVAL} 	= $interval;
     $hash->{VERSION} 	= $version;
+    $hash->{helper}{infoErrorCounter} = 0;
+    $hash->{helper}{setCmdErrorCounter} = 0;
 
 
     Log3 $name, 3, "HOMBOT ($name) - defined with host $hash->{HOST} on port $hash->{PORT} and interval $hash->{INTERVAL} (sec)";
@@ -82,8 +86,11 @@ sub HOMBOT_Define($$) {
     $attr{$name}{room} = "HOMBOT" if( !defined( $attr{$name}{room} ) );    # sorgt für Diskussion, überlegen ob nötig
     readingsSingleUpdate ( $hash, "state", "initialized", 1 );
 
+    HOMBOT_Get_stateRequestLocal( $hash );      # zu Testzwecken mal eingebaut
     InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMBOT_Get_stateRequest", $hash, 0 );
-	
+    
+    $modules{HOMBOT}{defptr}{$hash->{HOST}} = $hash;
+
     return undef;
 }
 
@@ -166,7 +173,7 @@ sub HOMBOT_Get_stateRequestLocal($) {
 my ( $hash ) = @_;
     my $name = $hash->{NAME};
 
-    HOMBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $hash->{NAME}, "state", 0 ) ne "initialized" && AttrVal( $name, "disable", 0 ) ne "1" );
+    HOMBOT_RetrieveHomebotInfomations( $hash ) if( AttrVal( $name, "disable", 0 ) ne "1" );  ##ReadingsVal( $hash->{NAME}, "state", 0 ) ne "initialized" && 
     
     return 0;
 }
@@ -176,7 +183,7 @@ sub HOMBOT_Get_stateRequest($) {
     my ( $hash ) = @_;
     my $name = $hash->{NAME};
  
-    HOMBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $name, "deviceState", "online" ) eq "online" && AttrVal( $name, "disable", 0 ) ne "1" );
+    HOMBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $name, "hombotState", "OFFLINE" ) ne "OFFLINE" && AttrVal( $name, "disable", 0 ) ne "1" );
   
     InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMBOT_Get_stateRequest", $hash, 1 );
     Log3 $name, 4, "HOMBOT ($name) - Call HOMBOT_Get_stateRequest";
@@ -186,9 +193,11 @@ sub HOMBOT_Get_stateRequest($) {
 
 sub HOMBOT_RetrieveHomebotInfomations($) {
     my ( $hash ) = @_;
+    my $name = $hash->{NAME};
     
     HOMBOT_getStatusTXT( $hash );
-    HOMBOT_getSchedule( $hash );
+    HOMBOT_getSchedule( $hash ) if( ReadingsVal( "$name","hombotState","CHARGING" ) eq "CHARGING" || ReadingsVal( "$name","hombotState","CHARGING" ) eq "STANDBY" );
+    HOMBOT_getStatisticHTML( $hash ) if( ReadingsVal( "$name","hombotState","CHARGING" ) eq "CHARGING" || ReadingsVal( "$name","hombotState","CHARGING" ) eq "STANDBY" );
     
     return undef;
 }
@@ -217,6 +226,32 @@ sub HOMBOT_getStatusTXT($) {
     );
     Log3 $name, 4, "HOMBOT ($name) - NonblockingGet get URL";
     Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Retrieve status.txt Information: calling Host: $host";
+}
+
+sub HOMBOT_getStatisticHTML($) {
+
+    my ($hash) = @_;
+    my $name = $hash->{NAME};
+    my $host = $hash->{HOST};
+    my $port = $hash->{PORT};
+
+    
+    my $url = "http://" . $host . ":" . $port . "/sites/statistic.html";
+
+
+    HttpUtils_NonblockingGet(
+	{
+	    url		=> $url,
+	    timeout	=> 10,
+	    hash	=> $hash,
+	    method	=> "GET",
+	    doTrigger	=> 1,
+	    callback	=> \&HOMBOT_RetrieveHomebotInfoFinished,
+	    id          => "statistichtml",
+	}
+    );
+    Log3 $name, 4, "HOMBOT ($name) - NonblockingGet get URL";
+    Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Retrieve statistic.html Information: calling Host: $host";
 }
 
 sub HOMBOT_getSchedule($) {
@@ -263,7 +298,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
 	
-	if( $hash->{helper}{infoErrorCounter} > 9 && $hash->{helper}{setCmdErrorCounter} > 4 ) {
+	if( $hash->{helper}{infoErrorCounter} > 4 && $hash->{helper}{setCmdErrorCounter} > 3 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "unknown error, please contact the developer" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
@@ -282,7 +317,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - Homebot is offline";
 	    
-	    readingsBulkUpdate ( $hash, "homebotState", "offline");
+	    readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
 	    readingsBulkUpdate ( $hash, "state", "Homebot offline");
 	    
 	    $hash->{helper}{infoErrorCounter} = 0;
@@ -291,7 +326,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    return;
 	}
 
-	elsif( $hash->{helper}{infoErrorCounter} > 5 ) {
+	elsif( $hash->{helper}{infoErrorCounter} > 2 && $hash->{helper}{setCmdErrorCounter} > 0 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "to many errors, check your network configuration" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network Configuration";
@@ -367,6 +402,10 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 
     readingsBeginUpdate( $hash );
     
+    
+    my $t;      # fuer Readins Name
+    my $v;      # fuer Radings Value
+    
     if( $parsid eq "statustxt" ) {
     
         Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_status.txt";
@@ -380,24 +419,46 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
             $buffer{$values[0]} = $values[1];
         }
     
-        my $t;
-        my $v;
-    
         while( ( $t, $v ) = each %buffer ) {
     
             $v =~ tr/"//d;
+            $t =~ s/CPU_IDLE/cpu_IDLE/g;
+            $t =~ s/CPU_USER/cpu_USER/g;
+            $t =~ s/CPU_SYS/cpu_SYS/g;
+            $t =~ s/CPU_NICE/cpu_NICE/g;
             $t =~ s/JSON_MODE/cleanMode/g;
             $t =~ s/JSON_NICKNAME/nickname/g;
             $t =~ s/JSON_REPEAT/repeat/g;
             $t =~ s/JSON_TURBO/turbo/g;
-            $t =~ s/JSON_ROBOT_STATE/homebotState/g;
+            $t =~ s/JSON_ROBOT_STATE/hombotState/g;
             $t =~ s/CLREC_CURRENTBUMPING/currentBumping/g;
             $t =~ s/CLREC_LAST_CLEAN/lastClean/g;
             $t =~ s/JSON_BATTPERC/batteryPercent/g;
             $t =~ s/JSON_VERSION/firmware/g;
             $t =~ s/LGSRV_VERSION/luigiSrvVersion/g;
             
-            readingsBulkUpdate( $hash, $t, $v ) if( defined( $t ) && defined( $v ) );
+            readingsBulkUpdate( $hash, $t, $v ) if( $t =~ m/[a-z]/s && defined( $t ) && defined( $v ) );
+        }
+        
+        readingsBulkUpdate( $hash, "hombotState", "UNKNOWN" ) if( ReadingsVal( $name, "hombotState", "" ) eq "" );
+    }
+    
+    elsif( $parsid eq "statistichtml" ) {
+    
+        Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_statistic.html";
+        
+        while( $data =~ m/<th>(.*?):<\/th>\s*<td>(.*?)<\/td>/g ) {
+            $t = $1 if( defined( $1 ) );
+            $v = $2 if( defined( $2 ) );
+            
+            $t =~ s/NUM START ZZ/numZZ_Begin/g;
+            $t =~ s/NUM FINISH ZZ/numZZ_Ende/g;
+            $t =~ s/NUM START SB/numSB_Begin/g;
+            $t =~ s/NUM FINISH SB/numSB_Ende/g;
+            $t =~ s/NUM START SPOT/numSPOT_Begin/g;
+            $t =~ s/NUM FINISH SPOT/numSPOT_Ende/g;
+            
+            readingsBulkUpdate( $hash, $t, $v ) if( $t =~ m/num/s );
         }
     }
     
@@ -405,13 +466,13 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     
         Log3 $name, 4, "HOMBOT ($name) - HOMBOT_Parse_schedule.html";
         
-        my $t;
-        my $v;
         my $i = 0;
         
         while( $data =~ m/name="(.*?)"\s*size="20" maxlength="20" value="(.*?)"/g ) {
+            $t = $1 if( defined( $1 ) );
+            $v = $2 if( defined( $2 ) );
 
-            readingsBulkUpdate( $hash, "at_".$i."_".$1, "$2" ) if( defined( $1 ) && defined( $2 ) );
+            readingsBulkUpdate( $hash, "at_".$i."_".$t, $v );
             $i = ++$i;
         }
     }
@@ -442,7 +503,7 @@ sub HOMBOT_Set($$@) {
 	$list .= "repeat:true,false ";
 	$list .= "turbo:true,false ";
 	$list .= "nickname " ;
-	$list .= "schedule" ;
+	$list .= "schedule " ;
 	
 
 	if( lc $cmd eq 'cleanstart'
@@ -551,24 +612,29 @@ sub HOMBOT_SelectSetCmd($$@) {
     
     elsif( lc $cmd eq 'schedule' ) {
 
-        #$t =~ s/CLREC_CURRENTBUMPING/currentBumping/g;
-        my $mo = @data[0];
-        my $tu = @data[1];
-        my $we = @data[2];
-        my $th = @data[3];
-        my $fr = @data[4];
-        my $sa = @data[5];
-        my $su = @data[6];
+        #my $mo = $data[0];
+        $data[0] =~ s/Mo/MONDAY/g;
+        #my $tu = $data[1];
+        $data[1] =~ s/Di/TUESDAY/g;
+        #my $we = $data[2];
+        $data[2] =~ s/Mi/WEDNESDAY/g;
+        #my $th = $data[3];
+        $data[3] =~ s/Do/THURSDAY/g;
+        #my $fr = $data[4];
+        $data[4] =~ s/Fr/FRIDAY/g;
+        #my $sa = $data[5];
+        $data[5] =~ s/Sa/SATURDAY/g;
+        #my $su = $data[6];
+        $data[6] =~ s/So/SUNDAY/g;
 	
-	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$mo."&".$tu."&".$we."&".$th."&".$fr."&".$sa."&".$su."&SEND=Save";
+	#my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$mo."&".$tu."&".$we."&".$th."&".$fr."&".$sa."&".$su."&SEND=Save";
+	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$data[0]."&".$data[1]."&".$data[2]."&".$data[3]."&".$data[4]."&".$data[5]."&".$data[6]."&SEND=Save";
 
-	Log3 $name, 4, "HOMBOT ($name) - set schedule to $mo, $tu, $we, $th, $fr, $sa, $su";
+	Log3 $name, 4, "HOMBOT ($name) - set schedule to $data[0],$data[1],$data[2],$data[3],$data[4],$data[5],$data[6]";
 	    
 	return HOMBOT_HTTP_POST( $hash,$url );
     }
-    
-    #BACKMOVING_INIT        CHARGING, BACKMOVING_INIT, WORKING, PAUSE, HOMING und DOCKING
-    
+
     return undef;
 }
 
