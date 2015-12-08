@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.30";
+my $version = "0.1.35";
 
 
 
@@ -71,7 +71,7 @@ sub HOMBOT_Define($$) {
     my $name    	= $a[0];
     my $host    	= $a[2];
     my $port		= 6260;
-    my $interval  	= 120;
+    my $interval  	= 180;
 
     $hash->{HOST} 	= $host;
     $hash->{PORT} 	= $port;
@@ -182,10 +182,12 @@ sub HOMBOT_Get_stateRequest($) {
 
     my ( $hash ) = @_;
     my $name = $hash->{NAME};
+    
  
     HOMBOT_RetrieveHomebotInfomations( $hash ) if( ReadingsVal( $name, "hombotState", "OFFLINE" ) ne "OFFLINE" && AttrVal( $name, "disable", 0 ) ne "1" );
-  
+
     InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMBOT_Get_stateRequest", $hash, 1 );
+    
     Log3 $name, 4, "HOMBOT ($name) - Call HOMBOT_Get_stateRequest";
 
     return 1;
@@ -196,8 +198,8 @@ sub HOMBOT_RetrieveHomebotInfomations($) {
     my $name = $hash->{NAME};
     
     HOMBOT_getStatusTXT( $hash );
-    HOMBOT_getSchedule( $hash ) if( ReadingsVal( "$name","hombotState","CHARGING" ) eq "CHARGING" || ReadingsVal( "$name","hombotState","CHARGING" ) eq "STANDBY" );
-    HOMBOT_getStatisticHTML( $hash ) if( ReadingsVal( "$name","hombotState","CHARGING" ) eq "CHARGING" || ReadingsVal( "$name","hombotState","CHARGING" ) eq "STANDBY" );
+    HOMBOT_getSchedule( $hash ) if( ReadingsVal( "$name","hombotState","WORKING" ) eq "CHARGING" || ReadingsVal( "$name","hombotState","WORKING" ) eq "STANDBY" );
+    HOMBOT_getStatisticHTML( $hash ) if( ReadingsVal( "$name","hombotState","WORKING" ) eq "CHARGING" || ReadingsVal( "$name","hombotState","WORKING" ) eq "STANDBY" );
     
     return undef;
 }
@@ -403,8 +405,8 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     readingsBeginUpdate( $hash );
     
     
-    my $t;      # fuer Readins Name
-    my $v;      # fuer Radings Value
+    my $t;      # fuer Readings Name
+    my $v;      # fuer Readings Value
     
     if( $parsid eq "statustxt" ) {
     
@@ -485,6 +487,26 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
     readingsEndUpdate( $hash, 1 );
+    
+    
+    
+    ## verändert das INTERVAL in Abhängigkeit vom Arbeitsstatus des Bots
+    if( ReadingsVal( $name, "hombotState", "CHARGING" ) eq "WORKING" || ReadingsVal( $name, "hombotState", "CHARGING" ) eq "HOMING" || ReadingsVal( $name, "hombotState", "CHARGING" ) eq "DOCKING" ) {
+        
+        $hash->{INTERVAL} = 30;
+
+    } else {
+        my $interval = AttrVal( $name, "interval", 0 );
+    
+        if( $interval > 0 ) {
+            $hash->{INTERVAL} = $interval;
+        } else {
+            $hash->{INTERVAL} = 180;
+        }
+    }
+
+
+
 
     return undef;
 }
