@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.41";
+my $version = "0.1.42";
 
 
 
@@ -401,6 +401,8 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     ### Begin Parse Processing
     readingsSingleUpdate( $hash, "state", "active", 1) if( ReadingsVal( $name, "state", 0 ) ne "initialized" or ReadingsVal( $name, "state", 0 ) ne "active" );
     
+    my $previousHombotState = ReadingsVal( $name, "hombotState", "none" );
+    
 
     readingsBeginUpdate( $hash );
     
@@ -442,7 +444,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
             readingsBulkUpdate( $hash, $t, $v ) if( $t =~ m/[a-z]/s && defined( $t ) && defined( $v ) );
         }
         
-        readingsBulkUpdate( $hash, "hombotState", "UNKNOWN" ) if( ReadingsVal( $name, "hombotState", "" ) eq "" );
+        readingsBulkUpdate( $hash, "hombotState", "UNKNOWN" ) if( ReadingsVal( $name, "hombotState", "UNKNOWN" ) eq "" );
     }
     
     elsif( $parsid eq "statistichtml" ) {
@@ -488,7 +490,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
     readingsEndUpdate( $hash, 1 );
     
-    
+    $hash->{previousHombotState} = $previousHombotState if( $previousHombotState != ReadingsVal( $name, "hombotState", "none" );
     
     ## verändert das INTERVAL in Abhängigkeit vom Arbeitsstatus des Bots
     if( ReadingsVal( $name, "hombotState", "CHARGING" ) eq "WORKING" || ReadingsVal( $name, "hombotState", "CHARGING" ) eq "HOMING" || ReadingsVal( $name, "hombotState", "CHARGING" ) eq "DOCKING" ) {
