@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.42";
+my $version = "0.1.43";
 
 
 
@@ -490,7 +490,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
     readingsEndUpdate( $hash, 1 );
     
-    $hash->{previousHombotState} = $previousHombotState if( $previousHombotState != ReadingsVal( $name, "hombotState", "none" );
+    $hash->{previousHombotState} = $previousHombotState if( $previousHombotState != ReadingsVal( $name, "hombotState", "none" ) );
     
     ## verändert das INTERVAL in Abhängigkeit vom Arbeitsstatus des Bots
     if( ReadingsVal( $name, "hombotState", "CHARGING" ) eq "WORKING" || ReadingsVal( $name, "hombotState", "CHARGING" ) eq "HOMING" || ReadingsVal( $name, "hombotState", "CHARGING" ) eq "DOCKING" ) {
