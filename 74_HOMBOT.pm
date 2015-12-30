@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.45";
+my $version = "0.1.46";
 
 
 
@@ -77,8 +77,8 @@ sub HOMBOT_Define($$) {
     $hash->{PORT} 	= $port;
     $hash->{INTERVAL} 	= $interval;
     $hash->{VERSION} 	= $version;
-    $hash->{helper}{infoErrorCounter} = 0;
-    $hash->{helper}{setCmdErrorCounter} = 0;
+    $hash->{helper}{requestErrorCounter} = 0;
+    $hash->{helper}{setErrorCounter} = 0;
 
 
     Log3 $name, 3, "HOMBOT ($name) - defined with host $hash->{HOST} on port $hash->{PORT} and interval $hash->{INTERVAL} (sec)";
@@ -296,11 +296,15 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 
 
     ### Begin Error Handling
-    if( $hash->{helper}{infoErrorCounter} > 2 ) {
+    if( $hash->{helper}{requestErrorCounter} > 2 ) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
 	
-	if( $hash->{helper}{infoErrorCounter} > 4 && $hash->{helper}{setCmdErrorCounter} > 3 ) {
+	
+	my $aliveState = HOMBOT_checkAlive($hash);
+	$hash->{helper}{requestErrorCounter} = ($hash->{helper}{requestErrorCounter} - 1) if( $aliveState == 0 );
+	
+	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 3 && $aliveState == 1 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "unknown error, please contact the developer" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
@@ -308,13 +312,13 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    $attr{$name}{disable} = 1;
 	    readingsBulkUpdate ( $hash, "state", "Unknown Error, device disabled");
 	    
-	    $hash->{helper}{infoErrorCounter} = 0;
-	    $hash->{helper}{setCmdErrorCounter} = 0;
+	    $hash->{helper}{requestErrorCounter} = 0;
+	    $hash->{helper}{setErrorCounter} = 0;
 	    
 	    return;
 	}
 	
-	if( $hash->{helper}{infoErrorCounter} > 2 && $hash->{helper}{setCmdErrorCounter} == 0 ) {
+	if( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} == 0 && $aliveState == 1 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "Homebot is offline" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - Homebot is offline";
@@ -322,20 +326,20 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
 	    readingsBulkUpdate ( $hash, "state", "Homebot offline");
 	    
-	    $hash->{helper}{infoErrorCounter} = 0;
-	    $hash->{helper}{setCmdErrorCounter} = 0;
+	    $hash->{helper}{requestErrorCounter} = 0;
+	    $hash->{helper}{setErrorCounter} = 0;
 	    
 	    return;
 	}
 
-	elsif( $hash->{helper}{infoErrorCounter} > 2 && $hash->{helper}{setCmdErrorCounter} > 0 ) {
+	elsif( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} > 0 && $aliveState == 1 ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "to many errors, check your network configuration" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network Configuration";
 
 	    readingsBulkUpdate ( $hash, "homebotState", "offline");
 	    readingsBulkUpdate ( $hash, "state", "To many Errors");
-	    $hash->{helper}{infoErrorCounter} = 0;
+	    $hash->{helper}{requestErrorCounter} = 0;
 	}
 	readingsEndUpdate( $hash, 1 );
     }
@@ -344,7 +348,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     
         readingsBeginUpdate( $hash );
         readingsBulkUpdate ( $hash, "state", "$err") if( ReadingsVal( $name, "state", 1 ) ne "initialized" );
-        $hash->{helper}{infoErrorCounter} = ( $hash->{helper}{infoErrorCounter} + 1 );
+        $hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 1 );
 
         readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
         readingsBulkUpdate($hash, "lastStatusRequestError", $err );
@@ -358,7 +362,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     if( $data eq "" and exists( $param->{code} ) ) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate ( $hash, "state", $param->{code} ) if( ReadingsVal( $name, "state", 1 ) ne "initialized" );
-	$hash->{helper}{infoErrorCounter} = ( $hash->{helper}{infoErrorCounter} + 1 );
+	$hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 1 );
     
 	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
     
@@ -377,7 +381,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     if( ( $data =~ /Error/i ) and exists( $param->{code} ) ) {    
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "state", $param->{code} ) if( ReadingsVal( $name, "state" ,0) ne "initialized" );
-	$hash->{helper}{infoErrorCounter} = ( $hash->{helper}{infoErrorCounter} + 1 );
+	$hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 1 );
 
 	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
     
@@ -396,7 +400,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 
     ### End Error Handling
 
-    $hash->{helper}{infoErrorCounter} = 0;
+    $hash->{helper}{requestErrorCounter} = 0;
  
     ### Begin Parse Processing
     readingsSingleUpdate( $hash, "state", "active", 1) if( ReadingsVal( $name, "state", 0 ) ne "initialized" or ReadingsVal( $name, "state", 0 ) ne "active" );
@@ -484,7 +488,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 
     readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_done" );
     
-    $hash->{helper}{infoErrorCounter} = 0;
+    $hash->{helper}{requestErrorCounter} = 0;
     ### End Response Processing
     
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
@@ -696,35 +700,39 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
     
 
     ### Begin Error Handling
-    if( $hash->{helper}{setCmdErrorCounter} > 2 ) {
+    if( $hash->{helper}{setErrorCounter} > 2 ) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "lastSetCommandState", "statusRequest_error" );
 	
-	if( $hash->{helper}{infoErrorCounter} > 9 && $hash->{helper}{setCmdErrorCounter} > 4 ) {
+	
+	my $aliveState = HOMBOT_checkAlive($hash);
+	$hash->{helper}{setErrorCounter} = ($hash->{helper}{setErrorCounter} - 1) if( $aliveState == 0 );
+	
+	if( $hash->{helper}{requestErrorCounter} > 9 && $hash->{helper}{setErrorCounter} > 4 && $aliveState == 1 ) {
 	    readingsBulkUpdate($hash, "lastSetCommandError", "unknown error, please contact the developer" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
 	    
 	    $attr{$name}{disable} = 1;
 	    readingsBulkUpdate( $hash, "state", "Unknown Error" );
-	    $hash->{helper}{infoErrorCounter} = 0;
-	    $hash->{helper}{setCmdErrorCounter} = 0;
+	    $hash->{helper}{requestErrorCounter} = 0;
+	    $hash->{helper}{setErrorCounter} = 0;
 	    
 	    return;
 	}
 
-	elsif( $hash->{helper}{setCmdErrorCounter} > 4 ){
+	elsif( $hash->{helper}{setErrorCounter} > 4 && $aliveState == 1 ){
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "HTTP Server at Homebot offline" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - Please check HTTP Server at Homebot";
 	} 
-	elsif( $hash->{helper}{setCmdErrorCounter} > 9 ) {
+	elsif( $hash->{helper}{setErrorCounter} > 9 && $aliveState == 1 ) {
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "to many errors, check your network or device configuration" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network or Device Configuration";
 
 	    readingsBulkUpdate( $hash, "state", "To many Errors" );
-	    $hash->{helper}{setCmdErrorCounter} = 0;
+	    $hash->{helper}{setErrorCounter} = 0;
 	}
 	readingsEndUpdate( $hash, 1 );
     }
@@ -733,7 +741,7 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 	
         readingsBeginUpdate( $hash );
         readingsBulkUpdate( $hash, "state", $err ) if( ReadingsVal( $name, "state", 0 ) ne "initialized" );
-        $hash->{helper}{setCmdErrorCounter} = ($hash->{helper}{setCmdErrorCounter} + 1);
+        $hash->{helper}{setErrorCounter} = ($hash->{helper}{setErrorCounter} + 1);
 	  
         readingsBulkUpdate( $hash, "lastSetCommandState", "cmd_error" );
         readingsBulkUpdate( $hash, "lastSetCommandError", "$err" );
@@ -749,7 +757,7 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "state", $param->{code} ) if( ReadingsVal( $hash, "state", 0 ) ne "initialized" );
 	
-	$hash->{helper}{setCmdErrorCounter} = ( $hash->{helper}{setCmdErrorCounter} + 1 );
+	$hash->{helper}{setErrorCounter} = ( $hash->{helper}{setErrorCounter} + 1 );
 
 	readingsBulkUpdate($hash, "lastSetCommandState", "cmd_error" );
 	readingsBulkUpdate($hash, "lastSetCommandError", "http Error ".$param->{code} );
@@ -764,7 +772,7 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "state", $param->{code} ) if( ReadingsVal( $name, "state", 0 ) ne "initialized" );
 	
-	$hash->{helper}{setCmdErrorCounter} = ( $hash->{helper}{setCmdErrorCounter} + 1 );
+	$hash->{helper}{setErrorCounter} = ( $hash->{helper}{setErrorCounter} + 1 );
 
 	readingsBulkUpdate( $hash, "lastSetCommandState", "cmd_error" );
     
@@ -780,11 +788,52 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
     ### End Error Handling
     
     readingsSingleUpdate( $hash, "lastSetCommandState", "cmd_done", 1 );
-    $hash->{helper}{setCmdErrorCounter} = 0;
+    $hash->{helper}{setErrorCounter} = 0;
     
     HOMBOT_Get_stateRequestLocal( $hash );
     
     return undef;
+}
+
+sub HOMBOT_checkAlive($) {
+
+    my ($hash) = @_;
+    my $name = $hash->{NAME};
+    my $host = $hash->{HOST};
+    my $sshstate;
+    my $lgSrvPID;
+    my $checkalive;
+
+    $checkalive = qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host 'uname');
+    chomp $checkalive;
+    
+    if( $checkalive ne "" ) {
+    
+        Log3 $name, 5, "HOMBOT ($name) - ssh command returned with output: $checkalive";
+        
+        $sshstate = ( ( $checkalive =~ /Linux/ and not ( $checkalive =~ /Connection refused/ or $checkalive =~ /No route to host/ or $checkalive =~ /Connection reset by peer/) ) ? "online" : "offline");
+            
+    } else { 
+        
+        Log3 $name, 5, "HOMBOT ($name) - Could not execute ssh command";
+        return 1;
+    }
+    
+    if( $sshstate eq "online" ) {
+
+        Log3 $name, 5, "HOMBOT ($name) - Hombot ist online, will check lg.srv Prozess";
+        
+        $lgSrvPID = ((split (/\s+/,qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host 'ps | grep -v grep | grep /usr/bin/lg.srv' )))[1]);
+        Log3 $name, 5, "HOMBOT ($name) - Luigi Webserver is not running, i'll auto start it" unless( $lgSrvPID );
+        
+        qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host '/usr/bin/lg.srv &' ) unless( $lgSrvPID );
+        
+        return 0;
+        
+    } else {
+        
+        return 1;
+    }
 }
 
 
