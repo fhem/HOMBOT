@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.43";
+my $version = "0.1.45";
 
 
 
@@ -799,6 +799,81 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 
 <a name="HOMBOT"></a>
 <h3>HOMBOT</h3>
+<ul>
+  <u><b>HOMBOT - LG Homebot robotic vacuum cleaner</b></u>
+  <br>
+  After successfully hacking (WiFi-Mod) your Hombot, this Modul enables you to integrate your Hombot to FHEM.
+  The Connection-Interface between FHEM and Hombot is served by Luigi HTTP Server.
+  With this Module, the following is possible:
+  <ul>
+    <li>Readings about the Status will be saved.</li>
+    <li>Choice of cleaning mode</li>
+    <li>Start cleaning</li>
+    <li>Stop cleaning</li>
+    <li>Return to Homebase</li>
+    <li>Assign Nickname</li>
+    <li>Schedule Weekprogram</li>
+    <li>Activate 'Repeat' and 'Turbo'</li>
+  </ul>
+  
+  <br>
+  You need to set up the device for the Hombot like this.
+  <br><br>
+  <a name="HOMBOTdefine"></a>
+  <b>Define</b>
+  <ul><br>
+    <code>define &lt;name&gt; HOMBOT &lt;IP-ADRESS&gt;</code>
+    <br><br>
+    Example:
+    <ul><br>
+      <code>define Roberta HOMBOT 192.168.0.23</code><br>
+    </ul>
+    <br>
+    This command creates a HOMBOT-Device in room HOMBOT. The parameter &lt;IP-ADRESS&gt; determines the IP-Address of your Hombot.<br>
+    The standard query interval is 180 seconds. You can change it with attribute interval. The interval is dynamic in dependency of the workstatus. For example, the status WORKING is 30 seconds.
+    <br>
+  </ul>
+  <br><br> 
+  <b><u>The first Readings should already appear after setting up the Device entity. </u></b>
+  <br><br><br>
+  <a name="HOMBOTreadings"></a>
+  <b>Readings</b>
+  <ul>
+    <li>at_* - Reading for the week schedule. Start time for respective day.</li>
+    <li>batteryPercent - Battery status in percent %</li>
+    <li>cleanMode - Current cleanmode</li>
+    <li>cpu_* - Information about CPU load</li>
+    <li>currentBumping - Count of collisions with obstacles</li>
+    <li>firmware - current installed firmware version</li>
+    <li>hombotState - Status of Hombot</li>
+    <li>lastClean - Date and Time of last cleaning</li>
+    <li>lastSetCommandError - last error message from set command</li>
+    <li>lastSetCommandState - last status from set command. Command (un)successfully send</li>
+    <li>lastStatusRequestError - last error message from statusRequest command</li>
+    <li>lastStatusRequestState - last status from statusRequest command. Command (un)successfully send</li>
+    <li>luigiSrvVersion - Version of Luigi HTTP Servers of Hombot</li>
+    <li>nickname - Name of Hombot</li>
+    <li>num* - Previous started and ended cleanings in corresponding modes</li>
+    <li>repeat - Cleaning will repeated Yes/No</li>
+    <li>state - Module status</li>
+    <li>turbo - Turbo active Yes/No</li>
+  </ul>
+  <br><br>
+  <a name="HOMBOTset"></a>
+  <b>Set</b>
+  <ul>
+    <li>cleanMode - set cleaning mode (ZZ-ZigZag / SB-Cell by Cell / SPOT-Spiralcleaning</li>
+    <li>cleanStart - Start cleaning</li>
+    <li>homing - Stop cleaning and move Hombot back to Base</li>
+    <li>nickname - Sets HomBot's Nickname. Not visible in Reading until restart of Luigi-Server or HomBot itself.</li>
+    <li>pause - Will pause the cleaning process</li>
+    <li>repeat - Repeat cleaning? (true/false)</li>
+    <li>schedule - Set of Week schedule. For example, set Roberta schedule Mo=13:30 Di= Mi=14:00,ZZ Do=15:20 Fr= Sa=11:20 So=  therefore you can also add modes!</li>
+    <li>statusRequest - Requests new Statusreport from Device</li>
+    <li>turbo - Activation of Turbomode (true/false)</li>
+  </ul>
+  <br><br>
+</ul>
 
 =end html
 =begin html_DE
