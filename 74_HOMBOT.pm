@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.46";
+my $version = "0.1.50";
 
 
 
@@ -85,7 +85,7 @@ sub HOMBOT_Define($$) {
 
     $attr{$name}{room} = "HOMBOT" if( !defined( $attr{$name}{room} ) );    # sorgt für Diskussion, überlegen ob nötig
     readingsSingleUpdate ( $hash, "state", "initialized", 1 );
-    readingsSingleUpdate( $hash, "luigiHttpSrvState", "ok", 1 );
+    readingsSingleUpdate( $hash, "luigiHttpSrvState", "running", 1 );
 
     HOMBOT_Get_stateRequestLocal( $hash );      # zu Testzwecken mal eingebaut
     InternalTimer( gettimeofday()+$hash->{INTERVAL}, "HOMBOT_Get_stateRequest", $hash, 0 );
@@ -302,17 +302,15 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
 	
 	
-	if( $hash->{helper}{requestErrorCounter} > 1 && ReadingsVal( $name, "luigiHttpSrvState", "error" ) eq "ok"  ) {
+	if( $hash->{helper}{requestErrorCounter} > 1 && ReadingsVal( $name, "luigiHttpSrvState", "not running" ) eq "running"  ) {
 	
             Log3 $name, 3, "HOMBOT ($name) - Start SSH Connection, Check Luigi HTTP Server";
             HOMBOT_SSH_Read( $hash, 'uname' );
-            $hash->{helper}{requestErrorCounter} = ($hash->{helper}{requestErrorCounter} - 1) if( ReadingsVal( $name, "luigiHttpSrvState", "error" ) eq "ok" );
             
-            Log3 $name, 3, "HOMBOT ($name) - ENDE check ssh Error Schleife";
-            
+            Log3 $name, 4, "HOMBOT ($name) - ENDE check ssh Error Schleife";
         }
 	
-	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "error" ) eq "error" ) {
+	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "unknown error, please contact the developer" );
 	    
@@ -327,7 +325,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    return;
 	}
 	
-	if( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} == 0 && ReadingsVal( $name, "luigiHttpSrvState", "error" ) eq "error" ) {
+	if( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} == 0 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "Homebot is offline" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - Homebot is offline";
@@ -341,12 +339,12 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    return;
 	}
 
-	elsif( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} > 0 && ReadingsVal( $name, "luigiHttpSrvState", "error" ) eq "error" ) {
+	elsif( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} > 0 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "to many errors, check your network configuration" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network Configuration";
 
-	    readingsBulkUpdate ( $hash, "homebotState", "offline");
+	    readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
 	    readingsBulkUpdate ( $hash, "state", "To many Errors");
 	    $hash->{helper}{requestErrorCounter} = 0;
 	}
@@ -410,6 +408,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     ### End Error Handling
 
     $hash->{helper}{requestErrorCounter} = 0;
+    $hash->{helper}{setErrorCounter} = 0;
  
     ### Begin Parse Processing
     readingsSingleUpdate( $hash, "state", "active", 1) if( ReadingsVal( $name, "state", 0 ) ne "initialized" or ReadingsVal( $name, "state", 0 ) ne "active" );
@@ -500,7 +499,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     $hash->{helper}{requestErrorCounter} = 0;
     ### End Response Processing
     
-    readingsBulkUpdate( $hash, "luigiHttpSrvState", "ok" );
+    readingsBulkUpdate( $hash, "luigiHttpSrvState", "running" );
     Log3 $name, 5, "HOMBOT ($name) - Luigi Webserver is running";
     
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
@@ -712,15 +711,20 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
     
 
     ### Begin Error Handling
-    if( $hash->{helper}{setErrorCounter} > 2 ) {
+    if( $hash->{helper}{setErrorCounter} > 1 ) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "lastSetCommandState", "statusRequest_error" );
 	
 	
-	my $aliveState = HOMBOT_checkAlive($hash);
-	$hash->{helper}{setErrorCounter} = ($hash->{helper}{setErrorCounter} - 1) if( $aliveState == 0 );
+	if( $hash->{helper}{setErrorCounter} > 1 && ReadingsVal( $name, "luigiHttpSrvState", "not running" ) eq "running"  ) {
 	
-	if( $hash->{helper}{requestErrorCounter} > 9 && $hash->{helper}{setErrorCounter} > 4 && $aliveState == 1 ) {
+            Log3 $name, 3, "HOMBOT ($name) - Start SSH Connection, Check Luigi HTTP Server";
+            HOMBOT_SSH_Read( $hash, 'uname' );
+            
+            Log3 $name, 4, "HOMBOT ($name) - ENDE check ssh Error Schleife";
+        }
+	
+	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 2 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate($hash, "lastSetCommandError", "unknown error, please contact the developer" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
@@ -733,18 +737,26 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 	    return;
 	}
 
-	elsif( $hash->{helper}{setErrorCounter} > 4 && $aliveState == 1 ){
+	elsif( $hash->{helper}{setErrorCounter} > 2 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "not running" ){
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "HTTP Server at Homebot offline" );
+	    readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - Please check HTTP Server at Homebot";
+	    
+	    $hash->{helper}{requestErrorCounter} = 0;
+	    $hash->{helper}{setErrorCounter} = 0;
 	} 
-	elsif( $hash->{helper}{setErrorCounter} > 9 && $aliveState == 1 ) {
+	
+	elsif( $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "to many errors, check your network or device configuration" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network or Device Configuration";
 
 	    readingsBulkUpdate( $hash, "state", "To many Errors" );
+	    readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
+	    
 	    $hash->{helper}{setErrorCounter} = 0;
+	    $hash->{helper}{requestErrorCounter} = 0;
 	}
 	readingsEndUpdate( $hash, 1 );
     }
@@ -800,6 +812,7 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
     ### End Error Handling
     
     readingsSingleUpdate( $hash, "lastSetCommandState", "cmd_done", 1 );
+    $hash->{helper}{requestErrorCounter} = 0;
     $hash->{helper}{setErrorCounter} = 0;
     
     HOMBOT_Get_stateRequestLocal( $hash );
@@ -860,23 +873,25 @@ sub HOMBOT_SSH_Parse($$$) {
             
             if( not defined( $lgSrvPID ) ) {
             
-                readingsSingleUpdate( $hash, "luigiHttpSrvState", "error", 1 );
+                readingsSingleUpdate( $hash, "luigiHttpSrvState", "not running", 1 );
                 Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver is not running, i'll start it";
         
                 #qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host '/usr/bin/lg.srv &' ) unless( $lgSrvPID );
                 HOMBOT_SSH_Write( $hash, '/usr/bin/lg.srv &' );
                 HOMBOT_SSH_Read( $hash, 'uname' );
+                $hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} - 1 );
+                $hash->{helper}{setErrorCounter} = ($hash->{helper}{setErrorCounter} - 1);
                 
             } else {
             
-                readingsSingleUpdate( $hash, "luigiHttpSrvState", "ok", 1 );
+                readingsSingleUpdate( $hash, "luigiHttpSrvState", "running", 1 );
                 Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver is running";
                 
             }
             
         } else {
         
-            $hash->{helper}{requestErrorCounter} = ($hash->{helper}{requestErrorCounter} + 1)
+            $hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 2 )
             
         }
     }
