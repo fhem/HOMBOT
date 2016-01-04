@@ -298,8 +298,8 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 
     ### Begin Error Handling
     if( $hash->{helper}{requestErrorCounter} > 1 ) {
-	readingsBeginUpdate( $hash );
-	readingsBulkUpdate( $hash, "lastStatusRequestState", "statusRequest_error" );
+	
+	readingsSingleUpdate( $hash, "lastStatusRequestState", "statusRequest_error", 1 );
 	
 	
 	if( $hash->{helper}{requestErrorCounter} > 1 && ReadingsVal( $name, "luigiHttpSrvState", "not running" ) eq "running"  ) {
@@ -309,6 +309,8 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
             
             Log3 $name, 4, "HOMBOT ($name) - ENDE check ssh Error Schleife";
         }
+	
+	readingsBeginUpdate( $hash );
 	
 	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	
@@ -712,8 +714,8 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 
     ### Begin Error Handling
     if( $hash->{helper}{setErrorCounter} > 1 ) {
-	readingsBeginUpdate( $hash );
-	readingsBulkUpdate( $hash, "lastSetCommandState", "statusRequest_error" );
+	
+	readingsSingleUpdate( $hash, "lastSetCommandState", "statusRequest_error", 1 );
 	
 	
 	if( $hash->{helper}{setErrorCounter} > 1 && ReadingsVal( $name, "luigiHttpSrvState", "not running" ) eq "running"  ) {
@@ -723,6 +725,8 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
             
             Log3 $name, 4, "HOMBOT ($name) - ENDE check ssh Error Schleife";
         }
+        
+        readingsBeginUpdate( $hash );
 	
 	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 2 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate($hash, "lastSetCommandError", "unknown error, please contact the developer" );
