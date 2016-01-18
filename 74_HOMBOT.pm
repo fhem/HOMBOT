@@ -34,7 +34,7 @@ use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
 
-my $version = "0.1.50";
+my $version = "0.1.51";
 
 
 
@@ -502,7 +502,6 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
     ### End Response Processing
     
     readingsBulkUpdate( $hash, "luigiHttpSrvState", "running" );
-    Log3 $name, 5, "HOMBOT ($name) - Luigi Webserver is running";
     
     readingsBulkUpdate( $hash, "state", "active" ) if( ReadingsVal( $name, "state", 0 ) eq "initialized" );
     readingsEndUpdate( $hash, 1 );
