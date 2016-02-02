@@ -2,7 +2,7 @@
 # 
 # Developed with Kate
 #
-#  (c) 2015 Copyright: Marko Oldenburg (leongaultier at gmail dot com)
+#  (c) 2015-2016 Copyright: Marko Oldenburg (leongaultier at gmail dot com)
 #  All rights reserved
 #
 #  This script is free software; you can redistribute it and/or modify
@@ -33,8 +33,9 @@ use warnings;
 use Time::HiRes qw(gettimeofday);
 
 use HttpUtils;
+use Blocking;
 
-my $version = "0.1.51";
+my $version = "0.1.57";
 
 
 
@@ -84,6 +85,7 @@ sub HOMBOT_Define($$) {
     Log3 $name, 3, "HOMBOT ($name) - defined with host $hash->{HOST} on port $hash->{PORT} and interval $hash->{INTERVAL} (sec)";
 
     $attr{$name}{room} = "HOMBOT" if( !defined( $attr{$name}{room} ) );    # sorgt für Diskussion, überlegen ob nötig
+    readingsSingleUpdate ( $hash, "hombotState", "ONLINE", 1 );
     readingsSingleUpdate ( $hash, "state", "initialized", 1 );
     readingsSingleUpdate( $hash, "luigiHttpSrvState", "running", 1 );
 
@@ -104,6 +106,7 @@ sub HOMBOT_Undef($$) {
     
     delete $modules{HOMBOT}{defptr}{$hash->{HOST}};
     RemoveInternalTimer( $hash );
+    BlockingKill($hash->{helper}{RUNNING_PID}) if(defined($hash->{helper}{RUNNING_PID}));
     
     return undef;
 }
@@ -174,7 +177,7 @@ sub HOMBOT_Get_stateRequestLocal($) {
 my ( $hash ) = @_;
     my $name = $hash->{NAME};
 
-    HOMBOT_RetrieveHomebotInfomations( $hash ) if( AttrVal( $name, "disable", 0 ) ne "1" );  ##ReadingsVal( $hash->{NAME}, "state", 0 ) ne "initialized" && 
+    HOMBOT_RetrieveHomebotInfomations( $hash ) if( AttrVal( $name, "disable", 0 ) ne "1" );
     
     return 0;
 }
@@ -304,15 +307,14 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	
 	if( $hash->{helper}{requestErrorCounter} > 1 && ReadingsVal( $name, "luigiHttpSrvState", "not running" ) eq "running"  ) {
 	
-            Log3 $name, 3, "HOMBOT ($name) - Start SSH Connection, Check Luigi HTTP Server";
-            HOMBOT_SSH_Read( $hash, 'uname' );
+            Log3 $name, 3, "HOMBOT ($name) - Connecting Problem, Check Luigi HTTP Server" unless(exists($hash->{helper}{RUNNING_PID}));
             
-            Log3 $name, 4, "HOMBOT ($name) - ENDE check ssh Error Schleife";
+            $hash->{helper}{RUNNING_PID} = BlockingCall("HOMBOT_Check_Bot_Alive", $name."|request", "HOMBOT_Evaluation_Bot_Alive", 15, "HOMBOT_Aborted_Bot_Alive", $hash) unless(exists($hash->{helper}{RUNNING_PID}));
         }
 	
 	readingsBeginUpdate( $hash );
 	
-	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
+	if( $hash->{helper}{requestErrorCounter} > 6 && $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "unknown error, please contact the developer" );
 	    
@@ -327,7 +329,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    return;
 	}
 	
-	if( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} == 0 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
+	if( $hash->{helper}{requestErrorCounter} > 6 && $hash->{helper}{setErrorCounter} == 0 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "Homebot is offline" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - Homebot is offline";
@@ -341,7 +343,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	    return;
 	}
 
-	elsif( $hash->{helper}{requestErrorCounter} > 2 && $hash->{helper}{setErrorCounter} > 0 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
+	elsif( $hash->{helper}{requestErrorCounter} > 6 && $hash->{helper}{setErrorCounter} > 0 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate( $hash, "lastStatusRequestError", "to many errors, check your network configuration" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - To many Errors please check your Network Configuration";
@@ -368,7 +370,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	return;
     }
 
-    if( $data eq "" and exists( $param->{code} ) ) {
+    elsif( $data eq "" and exists( $param->{code} ) ) {
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate ( $hash, "state", $param->{code} ) if( ReadingsVal( $name, "state", 1 ) ne "initialized" );
 	$hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 1 );
@@ -387,7 +389,7 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
 	return;
     }
 
-    if( ( $data =~ /Error/i ) and exists( $param->{code} ) ) {    
+    elsif( ( $data =~ /Error/i ) and exists( $param->{code} ) ) {    
 	readingsBeginUpdate( $hash );
 	readingsBulkUpdate( $hash, "state", $param->{code} ) if( ReadingsVal( $name, "state" ,0) ne "initialized" );
 	$hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 1 );
@@ -562,10 +564,11 @@ sub HOMBOT_Set($$@) {
 	    my $val = join( " ", @val );
 	    my $wordlenght = length($val);
 
+	    return HOMBOT_SelectSetCmd( $hash, $cmd, @val ) if( lc $cmd eq 'statusrequest' );
 	    return "set command only works if state not equal initialized, please wait for next interval run" if( ReadingsVal( $hash->{NAME}, "state", 0 ) eq "initialized");
-	    return "to many bla bla for Nickname" if(( $wordlenght < 2 || $wordlenght > 16 ) && lc $cmd eq 'nickname' );
+	    return "to many character for Nickname" if(( $wordlenght < 2 || $wordlenght > 16 ) && lc $cmd eq 'nickname' );
 
-	    return HOMBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( @val ) || lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' );
+	    return HOMBOT_SelectSetCmd( $hash, $cmd, @val ) if( ( ( @val ) && lc $cmd eq 'statusrequest' || lc $cmd eq 'cleanstart'|| lc $cmd eq 'homing' || lc $cmd eq 'pause' ) );
 	}
 
 	return "Unknown argument $cmd, bearword as argument or wrong parameter(s), choose one of $list";
@@ -667,7 +670,6 @@ sub HOMBOT_SelectSetCmd($$@) {
         #my $su = $data[6];
         $data[6] =~ s/So/SUNDAY/g;
 	
-	#my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$mo."&".$tu."&".$we."&".$th."&".$fr."&".$sa."&".$su."&SEND=Save";
 	my $url = "http://" . $host . ":" . $port . "/sites/schedule.html?".$data[0]."&".$data[1]."&".$data[2]."&".$data[3]."&".$data[4]."&".$data[5]."&".$data[6]."&SEND=Save";
 
 	Log3 $name, 4, "HOMBOT ($name) - set schedule to $data[0],$data[1],$data[2],$data[3],$data[4],$data[5],$data[6]";
@@ -727,7 +729,7 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
         
         readingsBeginUpdate( $hash );
 	
-	if( $hash->{helper}{requestErrorCounter} > 4 && $hash->{helper}{setErrorCounter} > 2 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
+	if( $hash->{helper}{requestErrorCounter} > 6 && $hash->{helper}{setErrorCounter} > 2 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "running" ) {
 	    readingsBulkUpdate($hash, "lastSetCommandError", "unknown error, please contact the developer" );
 	    
 	    Log3 $name, 4, "HOMBOT ($name) - UNKNOWN ERROR, PLEASE CONTACT THE DEVELOPER, DEVICE DISABLED";
@@ -740,7 +742,7 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
 	    return;
 	}
 
-	elsif( $hash->{helper}{setErrorCounter} > 2 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "not running" ){
+	elsif( $hash->{helper}{setErrorCounter} > 3 && ReadingsVal( $name, "luigiHttpSrvState", "running" ) eq "not running" ){
 	    readingsBulkUpdate( $hash, "lastSetCommandError", "HTTP Server at Homebot offline" );
 	    readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
 	    
@@ -823,82 +825,183 @@ sub HOMBOT_HTTP_POSTerrorHandling($$$) {
     return undef;
 }
 
-sub HOMBOT_SSH_Connect($$) {
+sub HOMBOT_Check_Bot_Alive($) {
 
-    my ( $hash, $cmd ) = @_;
+    my ($string) = @_;
+    my ( $name, $callingtype ) = split("\\|", $string);
+    
+    my $hash = $defs{$name};
     my $host = $hash->{HOST};
-    my $name = $hash->{NAME};
-    my $cmdret;
+    my $sshalive;
     
-    Log3 $name, 3, "HOMBOT ($name) - Building SSH connections";
-    $cmdret = qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host '$cmd' );
+    Log3 $name, 4, "HOMBOT ($name) - Start SSH Connection for check Hombot alive";
     
-    return $cmdret;
-}
-
-sub HOMBOT_SSH_Write($$) {
-
-    my ( $hash, $cmd ) = @_;
-    my $name = $hash->{NAME};
-    my $cmdanswer;
-    
-    $cmdanswer = HOMBOT_SSH_Connect( $hash, $cmd ) if( defined( $cmd ) );
-}
-
-sub HOMBOT_SSH_Read($$) {
-
-    my ( $hash, $cmd ) = @_;
-    my $name = $hash->{NAME};
-    my $buf;
-    
-    $buf = HOMBOT_SSH_Connect( $hash, $cmd ) if( defined( $cmd ) );
-    
-    HOMBOT_SSH_Parse( $hash, $cmd, $buf ) if( defined( $buf ) );
-}
-
-sub HOMBOT_SSH_Parse($$$) {
-
-    my ( $hash, $cmd, $data ) = @_;
-    my $name = $hash->{NAME};
-    my $host = $hash->{HOST};
+    $sshalive = qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host "uname" );
 
     
-    if( $cmd eq 'uname' && $data ) {
+    if( $sshalive ) {
         
-        my $hombotstate = ( ( $data =~ /Linux/ and not ( $data =~ /Connection refused/ or $data =~ /No route to host/ or $data =~ /Connection reset by peer/) ) ? "online" : "offline");
+        my $hombotstate = ( ( $sshalive =~ /Linux/ and not ( $sshalive =~ /Connection refused/ or $sshalive =~ /No route to host/ or $sshalive =~ /Connection reset by peer/) ) ? "online" : "offline");
     
         if( $hombotstate eq "online" ) {
-        
-            readingsSingleUpdate( $hash, "hombotState", "ONLINE", 1 );
-            Log3 $name, 3, "HOMBOT ($name) - Hombot ist online, will check lg.srv Prozess";
+
+            Log3 $name, 4, "HOMBOT ($name) - Hombot is online, will check lg.srv Prozess";
             
             my $lgSrvPID = ((split (/\s+/,qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host 'ps | grep -v grep | grep /usr/bin/lg.srv' )))[1]);
             
             if( not defined( $lgSrvPID ) ) {
             
-                readingsSingleUpdate( $hash, "luigiHttpSrvState", "not running", 1 );
-                Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver is not running, i'll start it";
+                Log3 $name, 4, "HOMBOT ($name) - Luigi Webserver is not running, i'll start it";
         
-                #qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host '/usr/bin/lg.srv &' ) unless( $lgSrvPID );
-                HOMBOT_SSH_Write( $hash, '/usr/bin/lg.srv &' );
-                HOMBOT_SSH_Read( $hash, 'uname' );
-                $hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} - 1 );
-                $hash->{helper}{setErrorCounter} = ($hash->{helper}{setErrorCounter} - 1);
+                qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host '/usr/bin/lg.srv &' );
+                
+                Log3 $name, 4, "HOMBOT ($name) - Luigi Webserver was restarted";
+                return "$name|$callingtype|restarted";
                 
             } else {
             
-                readingsSingleUpdate( $hash, "luigiHttpSrvState", "running", 1 );
-                Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver is running";
-                
+                Log3 $name, 4, "HOMBOT ($name) - Luigi Webserver is running";
+                return "$name|$callingtype|running";
             }
             
         } else {
         
-            $hash->{helper}{requestErrorCounter} = ( $hash->{helper}{requestErrorCounter} + 2 )
-            
+            Log3 $name, 4, "HOMBOT ($name) - Hombot is not online";
+            return "$name|$callingtype|offline";
         }
+        
+    } else {
+    
+        Log3 $name, 4, "HOMBOT ($name) - Sorry, I have problems with processing";
+        return "$name|$callingtype|error";
     }
 }
+
+sub HOMBOT_Evaluation_Bot_Alive($) {
+
+    my ( $string ) = @_;
+    
+    return unless(defined($string));
+    
+    my @a = split("\\|",$string);
+    my $hash = $defs{$a[0]};
+    my $name = $hash->{NAME};
+    my $callingtype = $a[1];
+    my $alivestate = $a[2];
+    
+    Log3 $name, 3, "HOMBOT ($name) - String = $string";
+
+    delete($hash->{helper}{RUNNING_PID});
+    
+    return if($hash->{helper}{DISABLED});
+    
+    Log3 $name, 3, "HOMBOT ($name) - alivestate = $alivestate";
+    Log3 $name, 3, "HOMBOT ($name) - callingtype = $callingtype";
+    
+    readingsBeginUpdate( $hash );
+    
+    if( $callingtype eq "request" ) {
+        if( $alivestate eq "restarted" ) {
+        
+            $hash->{helper}{requestErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "running");
+            readingsBulkUpdate( $hash, "hombotState", "ONLINE");
+            HOMBOT_Get_stateRequestLocal( $hash );
+        
+            Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver was restarted";
+        }
+        
+        elsif( $alivestate eq "running" ) {
+        
+            $hash->{helper}{requestErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "running");
+            readingsBulkUpdate( $hash, "hombotState", "ONLINE");
+            HOMBOT_Get_stateRequestLocal( $hash );
+        
+            Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver is running";
+        }
+        
+        elsif( $alivestate eq "offline" ) {
+        
+            $hash->{helper}{requestErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "running");
+            readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
+	    readingsBulkUpdate ( $hash, "state", "Homebot offline");
+        
+            Log3 $name, 3, "HOMBOT ($name) - Hombot is not online";
+        }
+        
+        elsif( $alivestate eq "error" ) {
+        
+            $hash->{helper}{requestErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "not running");
+            readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
+	    readingsBulkUpdate ( $hash, "state", "unknown Errors");
+        
+            Log3 $name, 3, "HOMBOT ($name) - unknown Errors, please check your Network Configuration";
+        }
+    }
+    
+    elsif( $callingtype eq "set" ) {
+        if( $alivestate eq "restarted" ) {
+        
+            $hash->{helper}{setErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "running");
+            readingsBulkUpdate( $hash, "hombotState", "ONLINE");
+        
+            Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver was restarted";
+        }
+        
+        elsif( $alivestate eq "running" ) {
+        
+            $hash->{helper}{setErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "running");
+            readingsBulkUpdate( $hash, "hombotState", "ONLINE");
+        
+            Log3 $name, 3, "HOMBOT ($name) - Luigi Webserver is running";
+        }
+        
+        elsif( $alivestate eq "offline" ) {
+        
+            $hash->{helper}{setErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "running");
+            readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
+	    readingsBulkUpdate ( $hash, "state", "Homebot offline");
+        
+            Log3 $name, 3, "HOMBOT ($name) - Hombot is not online";
+        }
+        
+        elsif( $alivestate eq "error" ) {
+        
+            $hash->{helper}{setErrorCounter} = 0;
+            
+            readingsBulkUpdate( $hash, "luigiHttpSrvState", "not running");
+            readingsBulkUpdate ( $hash, "hombotState", "OFFLINE");
+	    readingsBulkUpdate ( $hash, "state", "unknown Errors");
+        
+            Log3 $name, 3, "HOMBOT ($name) - unknown Errors, please check your Network Configuration";
+        }
+    }
+    
+    readingsEndUpdate( $hash, 1 );
+}
+
+sub HOMBOT_Aborted_Bot_Alive($) {
+
+    my ($hash) = @_;
+    my $name = $hash->{NAME};
+
+    delete($hash->{helper}{RUNNING_PID});
+    Log3 $name, 3, "HOMBOT ($name) - The BlockingCall Process terminated unexpectedly. Timedout";
+}
+
 
 
 
