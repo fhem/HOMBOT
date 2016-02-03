@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use Blocking;
 
-my $version = "0.1.60";
+my $version = "0.2.0";
 
 
 
