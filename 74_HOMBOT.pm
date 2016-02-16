@@ -35,7 +35,7 @@ use Time::HiRes qw(gettimeofday);
 use HttpUtils;
 use Blocking;
 
-my $version = "0.2.1";
+my $version = "0.2.3";
 
 
 
@@ -48,6 +48,7 @@ sub HOMBOT_Initialize($) {
     $hash->{DefFn}	= "HOMBOT_Define";
     $hash->{UndefFn}	= "HOMBOT_Undef";
     $hash->{AttrFn}	= "HOMBOT_Attr";
+    $hash->{FW_detailFn}  = "HOMBOT_DetailFn";
     
     $hash->{AttrList} 	= "interval ".
 			  "disable:1 ".
@@ -456,10 +457,17 @@ sub HOMBOT_RetrieveHomebotInfoFinished($$$) {
             $t =~ s/JSON_TURBO/turbo/g;
             $t =~ s/JSON_ROBOT_STATE/hombotState/g;
             $t =~ s/CLREC_CURRENTBUMPING/currentBumping/g;
-            $t =~ s/CLREC_LAST_CLEAN/lastClean/g;
+            
+            if( $t eq "CLREC_LAST_CLEAN" ) {
+                my @lctime = split( '/' , $v );
+                $v = $lctime[2].".".$lctime[1].".".$lctime[0]." ".$lctime[3].":".$lctime[4];
+                $t = "lastClean";
+            }
+            
             $t =~ s/JSON_BATTPERC/batteryPercent/g;
             $t =~ s/JSON_VERSION/firmware/g;
             $t =~ s/LGSRV_VERSION/luigiSrvVersion/g;
+            
             
             readingsBulkUpdate( $hash, $t, $v ) if( $t =~ m/[a-z]/s && defined( $t ) && defined( $v ) );
         }
@@ -961,6 +969,16 @@ sub HOMBOT_Aborted_Bot_Alive($) {
 
     delete($hash->{helper}{RUNNING_PID});
     Log3 $name, 3, "HOMBOT ($name) - The BlockingCall Process terminated unexpectedly. Timedout";
+}
+
+sub HOMBOT_DetailFn() {         # Patch von Andre (justme1968)
+
+    my ($FW_wname, $d, $room, $pageHash) = @_; # pageHash is set for summaryFn.
+    my $hash = $defs{$d};
+
+    return if( !defined( $hash->{HOST} ) );
+
+    return "<b><u><a href=\"http://$hash->{HOST}:6260\" target=\"_blank\">Control Center</a></u></b><br>"
 }
 
 
