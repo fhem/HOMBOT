@@ -70,10 +70,17 @@ sub HOMBOT_Define($$) {
 
     return "too few parameters: define <name> HOMBOT <HOST>" if( @a != 3 );
     return "please check if ssh installed" unless( -X "/usr/bin/ssh" );
-    return "please check if /opt/fhem/.ssh/known_hosts exist" unless( -R "/opt/fhem/.ssh/known_hosts" );
-    return "please check if sshpass installed" unless( -X "/usr/bin/sshpass" );
+    return "please check if /opt/fhem/.ssh/known_hosts exist" unless( -R "/opt/fhem/.ssh/known_hosts" ) || unless( -R "/root/.ssh/known_hosts" );;
+    return "please check if sshpass installed" unless( -X "/usr/bin/sshpass" ) || unless( -X "/usr/local/bin/sshpass" );
     
 
+    my $sshpass;
+    my $knowhosts;
+    $sshpass = "/usr/bin/sshpass" unless( -X "/usr/bin/sshpass" );
+    $sshpass = "/usr/local/bin/sshpass" unless( -X "/usr/local/bin/sshpass" );
+    $knowhosts = "/opt/fhem/.ssh/known_hosts" unless( -R "/opt/fhem/.ssh/known_hosts" )
+    $knowhosts = "/root/.ssh/known_hosts" unless( -R "/root/.ssh/known_hosts" )
+    
     my $name    	= $a[0];
     my $host    	= $a[2];
     my $port		= 6260;
