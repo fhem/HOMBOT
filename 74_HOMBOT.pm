@@ -75,12 +75,10 @@ sub HOMBOT_Define($$) {
     
 
     my $sshpass;
-    my $knowhosts;
     $sshpass = "/usr/bin/sshpass" unless( -X "/usr/bin/sshpass" );
     $sshpass = "/usr/local/bin/sshpass" unless( -X "/usr/local/bin/sshpass" );
-    $knowhosts = "/opt/fhem/.ssh/known_hosts" unless( -R "/opt/fhem/.ssh/known_hosts" )
-    $knowhosts = "/root/.ssh/known_hosts" unless( -R "/root/.ssh/known_hosts" )
-    
+
+
     my $name    	= $a[0];
     my $host    	= $a[2];
     my $port		= 6260;
@@ -855,15 +853,15 @@ sub HOMBOT_Check_Bot_Alive($) {
     Log3 $name, 3, "HOMBOT ($name) - Start SSH Connection for check Hombot alive";
     
     
-    $sshalive = qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host 'uname' );
+    $sshalive = qx($sshpass -p 'most9981' /usr/bin/ssh root\@$host 'uname' );
     
     if( $sshalive ) {
         
-        my $lgSrvPID = ((split (/\s+/,qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host 'ps | grep -v grep | grep /usr/bin/lg.srv' )))[1]);
+        my $lgSrvPID = ((split (/\s+/,qx($sshpass -p 'most9981' /usr/bin/ssh root\@$host 'ps | grep -v grep | grep /usr/bin/lg.srv' )))[1]);
             
         if( not defined( $lgSrvPID ) ) {
 
-            qx(/usr/bin/sshpass -p 'most9981' /usr/bin/ssh root\@$host '/usr/bin/lg.srv &' );
+            qx($sshpass -p 'most9981' /usr/bin/ssh root\@$host '/usr/bin/lg.srv &' );
                 
             return "$name|$callingtype|restarted";
 
