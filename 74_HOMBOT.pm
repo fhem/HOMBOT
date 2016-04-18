@@ -70,8 +70,8 @@ sub HOMBOT_Define($$) {
 
     return "too few parameters: define <name> HOMBOT <HOST>" if( @a != 3 );
     return "please check if ssh installed" unless( -X "/usr/bin/ssh" );
-    return "please check if /opt/fhem/.ssh/known_hosts exist" unless( -R "/opt/fhem/.ssh/known_hosts" ) || unless( -R "/root/.ssh/known_hosts" );;
-    return "please check if sshpass installed" unless( -X "/usr/bin/sshpass" ) || unless( -X "/usr/local/bin/sshpass" );
+    return "please check if /opt/fhem/.ssh/known_hosts exist" unless( -R "/opt/fhem/.ssh/known_hosts" or -R "/root/.ssh/known_hosts" );
+    return "please check if sshpass installed" unless( -X "/usr/bin/sshpass" or -X "/usr/local/bin/sshpass" );
     
 
     my $sshpass;
@@ -849,6 +849,9 @@ sub HOMBOT_Check_Bot_Alive($) {
     my $hash = $defs{$name};
     my $host = $hash->{HOST};
     my $sshalive;
+    my $sshpass;
+    $sshpass = "/usr/bin/sshpass" unless( -X "/usr/bin/sshpass" );
+    $sshpass = "/usr/local/bin/sshpass" unless( -X "/usr/local/bin/sshpass" );
     
     Log3 $name, 3, "HOMBOT ($name) - Start SSH Connection for check Hombot alive";
     
